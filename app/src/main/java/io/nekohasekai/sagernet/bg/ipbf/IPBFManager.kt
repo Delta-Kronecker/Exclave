@@ -20,17 +20,19 @@ object IPBFManager {
         try {
             System.loadLibrary("ip_bypass_plus_frag")
             library = Native.load("ip_bypass_plus_frag", IPBFLibrary::class.java)
-            library!!.ipbp_set_log_callback(IPBFLibrary.LogCallback { level, message ->
-                if (message != null) {
-                    val prefix = when (level) {
-                        0 -> "I"
-                        1 -> "E"
-                        2 -> "W"
-                        else -> "D"
-                    }
-                    logBuffer.add("[$prefix] $message")
-                    while (logBuffer.size > MAX_LOG_LINES) {
-                        logBuffer.poll()
+            library!!.ipbp_set_log_callback(object : IPBFLibrary.LogCallback {
+                override fun callback(level: Int, message: String?) {
+                    if (message != null) {
+                        val prefix = when (level) {
+                            0 -> "I"
+                            1 -> "E"
+                            2 -> "W"
+                            else -> "D"
+                        }
+                        logBuffer.add("[$prefix] $message")
+                        while (logBuffer.size > MAX_LOG_LINES) {
+                            logBuffer.poll()
+                        }
                     }
                 }
             })

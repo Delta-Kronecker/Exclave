@@ -9,6 +9,7 @@ import androidx.core.view.updatePadding
 import io.nekohasekai.sagernet.R
 import io.nekohasekai.sagernet.bg.ipbf.IPBFManager
 import io.nekohasekai.sagernet.databinding.LayoutIpbfBinding
+import androidx.lifecycle.lifecycleScope
 import io.nekohasekai.sagernet.ktx.*
 import kotlinx.coroutines.*
 
