@@ -30,10 +30,9 @@ object IPBFManager {
                 return
             }
 
-            logBuffer.add("[I] Step 2: loading native library via Native.loadLibrary")
-            library = Native.loadLibrary("ip_bypass_plus_frag", IPBFLibrary::class.java,
-                mapOf(Native.OPTION_OPEN_FLAGS to 0))
-            logBuffer.add("[I] Native.loadLibrary OK")
+            logBuffer.add("[I] Step 2: loading native library via Native.load")
+            library = Native.load(soFile.absolutePath, IPBFLibrary::class.java)
+            logBuffer.add("[I] Native.load OK")
         } catch (e: UnsatisfiedLinkError) {
             logBuffer.add("[E] UnsatisfiedLinkError: ${e.message}")
             logBuffer.add("[E] This means the .so cannot be loaded. Check ABI match.")
