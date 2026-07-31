@@ -17,9 +17,38 @@ object IPBFManager {
     val isRunning: Boolean get() = handle != null
 
     fun init() {
+        val libDir = SagerNet.application.applicationInfo.nativeLibraryDir
+        val soFile = File(libDir, "libip_bypass_plus_frag.so")
+
+        logBuffer.add("[I] Looking for library at: ${soFile.absolutePath}")
+        logBuffer.add("[I] Library exists: ${soFile.exists()}")
+
+        if (!soFile.exists()) {
+            logBuffer.add("[E] libip_bypass_plus_frag.so not found in nativeLibraryDir")
+            logBuffer.add("[E] nativeLibraryDir contents: ${File(libDir).list()?.joinToString()}")
+            Logs.w("IPBF .so not found at ${soFile.absolutePath}")
+            return
+        }
+
         try {
-            System.loadLibrary("ip_bypass_plus_frag")
-            library = Native.load("ip_bypass_plus_frag", IPBFLibrary::class.java)
+            System.load(soFile.absolutePath)
+            logBuffer.add("[I] System.load OK")
+        } catch (e: UnsatisfiedLinkError) {
+            logBuffer.add("[E] System.load failed: ${e.message}")
+            Logs.w("IPBF System.load failed", e)
+            return
+        }
+
+        try {
+            library = Native.loadLibrary("ip_bypass_plus_frag", IPBFLibrary::class.java)
+            logBuffer.add("[I] Native.loadLibrary OK")
+        } catch (e: Exception) {
+            logBuffer.add("[E] Native.loadLibrary failed: ${e.message}")
+            Logs.w("IPBF Native.load failed", e)
+            return
+        }
+
+        try {
             library!!.ipbp_set_log_callback(object : IPBFLibrary.LogCallback {
                 override fun callback(level: Int, message: String?) {
                     if (message != null) {
@@ -38,35 +67,22 @@ object IPBFManager {
                     }
                 }
             })
-            copyAssetsIfNeeded()
-            val ver = getVersion()
-            Logs.i("IPBF library loaded, version: $ver")
-            logBuffer.add("[I] IPBF library loaded (v$ver)")
+            logBuffer.add("[I] Log callback set")
         } catch (e: Exception) {
-            Logs.w("Failed to load IPBF library", e)
-            logBuffer.add("[E] Failed to load library: ${e.message}")
-        }
-    }
-
-    private fun copyAssetsIfNeeded() {
-        val ipbfDir = File(SagerNet.deviceStorage.noBackupFilesDir, "ipbf")
-        if (!ipbfDir.exists()) ipbfDir.mkdirs()
-
-        val configToml = File(ipbfDir, "config.toml")
-        SagerNet.application.assets.open("ipbf/config.toml").use { input ->
-            configToml.outputStream().use { output -> input.copyTo(output) }
+            logBuffer.add("[E] Failed to set log callback: ${e.message}")
+            Logs.w("IPBF log callback failed", e)
+            return
         }
 
-        val ipList = File(ipbfDir, "ip_list.txt")
-        SagerNet.application.assets.open("ipbf/ip_list.txt").use { input ->
-            ipList.outputStream().use { output -> input.copyTo(output) }
-        }
+        val ver = getVersion()
+        logBuffer.add("[I] IPBF library loaded (v$ver)")
+        Logs.i("IPBF library loaded, version: $ver")
     }
 
     fun start() {
         if (handle != null) return
         val lib = library ?: run {
-            logBuffer.add("[E] Library not loaded")
+            logBuffer.add("[E] Library not loaded, call init() first")
             return
         }
 
@@ -75,7 +91,7 @@ object IPBFManager {
             val configFile = File(ipbfDir, "config.toml")
 
             if (!configFile.exists()) {
-                logBuffer.add("[E] config.toml not found")
+                logBuffer.add("[E] config.toml not found at: ${configFile.absolutePath}")
                 return
             }
 
@@ -143,7 +159,7 @@ object IPBFManager {
             lib.ipbp_free_string(ptr)
             version
         } catch (e: Exception) {
-            "unknown"
+            "unknown: ${e.message}"
         }
     }
 }
