@@ -166,6 +166,21 @@ object IPBFManager {
 
     fun getLogBuffer(): ConcurrentLinkedQueue<String> = logBuffer
 
+    private fun copyAssetsIfNeeded() {
+        val ipbfDir = File(SagerNet.deviceStorage.noBackupFilesDir, "ipbf")
+        if (!ipbfDir.exists()) ipbfDir.mkdirs()
+
+        val configToml = File(ipbfDir, "config.toml")
+        SagerNet.application.assets.open("ipbf/config.toml").use { input ->
+            configToml.outputStream().use { output -> input.copyTo(output) }
+        }
+
+        val ipList = File(ipbfDir, "ip_list.txt")
+        SagerNet.application.assets.open("ipbf/ip_list.txt").use { input ->
+            ipList.outputStream().use { output -> input.copyTo(output) }
+        }
+    }
+
     private fun getVersion(): String {
         val lib = library ?: return "unknown"
         return try {
