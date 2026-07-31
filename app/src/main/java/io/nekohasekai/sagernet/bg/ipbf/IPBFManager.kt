@@ -79,6 +79,18 @@ object IPBFManager {
         } catch (e: Throwable) {
             logBuffer.add("[E] Step 4 failed: ${e.message}")
         }
+
+        try {
+            logBuffer.add("[I] Step 5: copying assets to internal storage")
+            copyAssetsIfNeeded()
+            val ipbfDir = File(SagerNet.deviceStorage.noBackupFilesDir, "ipbf")
+            logBuffer.add("[I] Step 5 OK: ipbf dir = ${ipbfDir.absolutePath}")
+            logBuffer.add("[I] config.toml exists: ${File(ipbfDir, "config.toml").exists()}")
+            logBuffer.add("[I] ip_list.txt exists: ${File(ipbfDir, "ip_list.txt").exists()}")
+        } catch (e: Throwable) {
+            logBuffer.add("[E] Step 5 failed (${e.javaClass.simpleName}): ${e.message}")
+            Logs.w("IPBF copyAssets failed", e)
+        }
     }
 
     fun start() {
