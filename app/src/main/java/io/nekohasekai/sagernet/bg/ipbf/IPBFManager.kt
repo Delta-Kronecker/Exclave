@@ -38,8 +38,10 @@ object IPBFManager {
             })
             copyAssetsIfNeeded()
             Logs.i("IPBF library loaded, version: ${getVersion()}")
+            logBuffer.add("[I] IPBF library loaded")
         } catch (e: Exception) {
             Logs.w("Failed to load IPBF library", e)
+            logBuffer.add("[E] Failed to load library: ${e.message}")
         }
     }
 
@@ -62,9 +64,12 @@ object IPBFManager {
         }
     }
 
-    fun start(targetIp: String = "104.16.0.1") {
+    fun start() {
         if (handle != null) return
-        val lib = library ?: return
+        val lib = library ?: run {
+            logBuffer.add("[E] Library not loaded")
+            return
+        }
 
         try {
             val ipbfDir = File(SagerNet.deviceStorage.noBackupFilesDir, "ipbf")
@@ -73,9 +78,9 @@ object IPBFManager {
 
             logBuffer.clear()
             logBuffer.add("[I] Starting IPBF proxy...")
-            handle = lib.ipbp_start_proxy_from_config(configText, targetIp)
+            handle = lib.ipbp_start_proxy_from_config(configText, "")
             if (handle != null) {
-                logBuffer.add("[I] IPBF proxy started successfully")
+                logBuffer.add("[I] IPBF proxy started")
             } else {
                 logBuffer.add("[E] Failed to start IPBF proxy")
             }

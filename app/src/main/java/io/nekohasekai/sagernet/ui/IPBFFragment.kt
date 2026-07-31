@@ -1,6 +1,8 @@
 package io.nekohasekai.sagernet.ui
 
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import android.view.*
 import androidx.appcompat.widget.Toolbar
 import androidx.core.view.ViewCompat
@@ -9,15 +11,21 @@ import androidx.core.view.updatePadding
 import io.nekohasekai.sagernet.R
 import io.nekohasekai.sagernet.bg.ipbf.IPBFManager
 import io.nekohasekai.sagernet.databinding.LayoutIpbfBinding
-import androidx.lifecycle.lifecycleScope
 import io.nekohasekai.sagernet.ktx.*
-import kotlinx.coroutines.*
 
 class IPBFFragment : ToolbarFragment(R.layout.layout_ipbf),
     Toolbar.OnMenuItemClickListener {
 
     lateinit var binding: LayoutIpbfBinding
-    private var logJob: Job? = null
+    private val handler = Handler(Looper.getMainLooper())
+    private val logRunnable = object : Runnable {
+        override fun run() {
+            if (isAdded) {
+                updateLogs()
+                handler.postDelayed(this, 500)
+            }
+        }
+    }
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
@@ -66,7 +74,17 @@ class IPBFFragment : ToolbarFragment(R.layout.layout_ipbf),
             }
         }
 
-        startLogPolling()
+        updateLogs()
+    }
+
+    override fun onResume() {
+        super.onResume()
+        handler.post(logRunnable)
+    }
+
+    override fun onPause() {
+        handler.removeCallbacks(logRunnable)
+        super.onPause()
     }
 
     private fun updateStatus() {
@@ -81,23 +99,18 @@ class IPBFFragment : ToolbarFragment(R.layout.layout_ipbf),
         }
     }
 
-    private fun startLogPolling() {
-        logJob = viewLifecycleOwner.lifecycleScope.launch {
-            while (isActive) {
-                val logs = IPBFManager.getLogBuffer()
-                if (logs.isNotEmpty()) {
-                    binding.ipbfLogsText.text = logs.joinToString("\n")
-                    binding.ipbfLogsScroll.post {
-                        binding.ipbfLogsScroll.fullScroll(View.FOCUS_DOWN)
-                    }
-                }
-                delay(500)
+    private fun updateLogs() {
+        val logs = IPBFManager.getLogBuffer()
+        if (logs.isNotEmpty()) {
+            binding.ipbfLogsText.text = logs.joinToString("\n")
+            binding.ipbfLogsScroll.post {
+                binding.ipbfLogsScroll.fullScroll(View.FOCUS_DOWN)
             }
         }
     }
 
     override fun onDestroy() {
-        logJob?.cancel()
+        handler.removeCallbacks(logRunnable)
         super.onDestroy()
     }
 
