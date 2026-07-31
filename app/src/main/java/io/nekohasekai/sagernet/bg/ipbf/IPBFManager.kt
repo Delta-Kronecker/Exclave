@@ -29,7 +29,9 @@ object IPBFManager {
                             2 -> "W"
                             else -> "D"
                         }
-                        logBuffer.add("[$prefix] $message")
+                        val line = "[$prefix] $message"
+                        logBuffer.add(line)
+                        Logs.i("IPBF: $line")
                         while (logBuffer.size > MAX_LOG_LINES) {
                             logBuffer.poll()
                         }
@@ -37,8 +39,9 @@ object IPBFManager {
                 }
             })
             copyAssetsIfNeeded()
-            Logs.i("IPBF library loaded, version: ${getVersion()}")
-            logBuffer.add("[I] IPBF library loaded")
+            val ver = getVersion()
+            Logs.i("IPBF library loaded, version: $ver")
+            logBuffer.add("[I] IPBF library loaded (v$ver)")
         } catch (e: Exception) {
             Logs.w("Failed to load IPBF library", e)
             logBuffer.add("[E] Failed to load library: ${e.message}")
@@ -50,17 +53,13 @@ object IPBFManager {
         if (!ipbfDir.exists()) ipbfDir.mkdirs()
 
         val configToml = File(ipbfDir, "config.toml")
-        if (!configToml.exists()) {
-            SagerNet.application.assets.open("ipbf/config.toml").use { input ->
-                configToml.outputStream().use { output -> input.copyTo(output) }
-            }
+        SagerNet.application.assets.open("ipbf/config.toml").use { input ->
+            configToml.outputStream().use { output -> input.copyTo(output) }
         }
 
         val ipList = File(ipbfDir, "ip_list.txt")
-        if (!ipList.exists()) {
-            SagerNet.application.assets.open("ipbf/ip_list.txt").use { input ->
-                ipList.outputStream().use { output -> input.copyTo(output) }
-            }
+        SagerNet.application.assets.open("ipbf/ip_list.txt").use { input ->
+            ipList.outputStream().use { output -> input.copyTo(output) }
         }
     }
 
@@ -73,20 +72,36 @@ object IPBFManager {
 
         try {
             val ipbfDir = File(SagerNet.deviceStorage.noBackupFilesDir, "ipbf")
-            val configToml = File(ipbfDir, "config.toml")
-            val configText = configToml.readText()
+            val configFile = File(ipbfDir, "config.toml")
 
-            logBuffer.clear()
-            logBuffer.add("[I] Starting IPBF proxy...")
-            handle = lib.ipbp_start_proxy_from_config(configText, "")
+            if (!configFile.exists()) {
+                logBuffer.add("[E] config.toml not found")
+                return
+            }
+
+            logBuffer.add("[I] Starting IPBF...")
+            logBuffer.add("[I] Config: ${configFile.absolutePath}")
+
+            val configPath = configFile.absolutePath
+
+            val result = lib.ipbp_load_config(configPath)
+            if (result != 0) {
+                logBuffer.add("[E] Config validation failed (code: $result)")
+                return
+            }
+            logBuffer.add("[I] Config validated OK")
+
+            handle = lib.ipbp_start_proxy(configPath, "", "")
+
             if (handle != null) {
-                logBuffer.add("[I] IPBF proxy started")
+                logBuffer.add("[I] IPBF proxy started successfully")
             } else {
-                logBuffer.add("[E] Failed to start IPBF proxy")
+                logBuffer.add("[E] ipbp_start_proxy returned NULL")
             }
         } catch (e: Exception) {
             Logs.w("IPBF start failed", e)
-            logBuffer.add("[E] Start failed: ${e.message}")
+            logBuffer.add("[E] Exception: ${e.message}")
+            logBuffer.add("[E] ${e.stackTraceToString()}")
         }
     }
 

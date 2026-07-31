@@ -18,6 +18,8 @@ interface IPBFLibrary : Library {
 
     fun ipbp_load_config(config_path: String): Int
 
+    fun ipbp_start_proxy(config_path: String, target_ip: String, interface_ip: String): Pointer?
+
     fun ipbp_start_proxy_from_config(config_text: String, target_ip: String): Pointer?
 
     fun ipbp_stop_proxy(handle: Pointer)

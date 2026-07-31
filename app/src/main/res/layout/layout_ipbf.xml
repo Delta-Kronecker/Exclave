@@ -94,7 +94,9 @@
             android:layout_height="wrap_content"
             android:fontFamily="monospace"
             android:textIsSelectable="true"
-            android:textSize="8sp"
+            android:textColor="?android:attr/textColorPrimary"
+            android:textSize="10sp"
+            android:padding="8dp"
             tools:ignore="SmallSp,SpeakableTextPresentCheck" />
 
     </androidx.core.widget.NestedScrollView>
