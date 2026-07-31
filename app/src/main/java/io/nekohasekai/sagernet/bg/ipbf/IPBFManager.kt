@@ -31,19 +31,10 @@ object IPBFManager {
         }
 
         try {
-            System.load(soFile.absolutePath)
-            logBuffer.add("[I] System.load OK")
-        } catch (e: UnsatisfiedLinkError) {
-            logBuffer.add("[E] System.load failed: ${e.message}")
-            Logs.w("IPBF System.load failed", e)
-            return
-        }
-
-        try {
-            library = Native.loadLibrary("ip_bypass_plus_frag", IPBFLibrary::class.java)
-            logBuffer.add("[I] Native.loadLibrary OK")
+            library = Native.load(soFile.absolutePath, IPBFLibrary::class.java)
+            logBuffer.add("[I] Native.load OK")
         } catch (e: Exception) {
-            logBuffer.add("[E] Native.loadLibrary failed: ${e.message}")
+            logBuffer.add("[E] Native.load failed: ${e.message}")
             Logs.w("IPBF Native.load failed", e)
             return
         }

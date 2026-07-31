@@ -1,9 +1,13 @@
 package io.nekohasekai.sagernet.ui
 
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.content.Context
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.view.*
+import android.widget.Toast
 import androidx.appcompat.widget.Toolbar
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
@@ -71,6 +75,16 @@ class IPBFFragment : ToolbarFragment(R.layout.layout_ipbf),
                 }
                 updateStatus()
                 snackbar(R.string.ipbf_range_applied).show()
+            }
+        }
+
+        binding.ipbfCopyLog.setOnClickListener {
+            val logs = IPBFManager.getLogBuffer().joinToString("\n")
+            if (logs.isNotEmpty()) {
+                val clipboard = requireContext().getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                val clip = ClipData.newPlainText("IPBF Logs", logs)
+                clipboard.setPrimaryClip(clip)
+                Toast.makeText(requireContext(), R.string.log_copied, Toast.LENGTH_SHORT).show()
             }
         }
 

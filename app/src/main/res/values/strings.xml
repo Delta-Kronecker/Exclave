@@ -387,6 +387,8 @@
     <string name="ipbf_apply">Apply Range</string>
     <string name="ipbf_logs">Logs</string>
     <string name="ipbf_range_applied">IP range applied</string>
+    <string name="copy_log">Copy Log</string>
+    <string name="log_copied">Log copied to clipboard</string>
     <string name="wireguard_local_address">Local address</string>
     <string name="wireguard_public_key">Peer public key</string>
     <string name="wireguard_psk">Peer pre-shared key</string>
