@@ -30,12 +30,11 @@ object IPBFManager {
                 return
             }
 
-            logBuffer.add("[I] Step 2: loading native library via Native.load")
+            logBuffer.add("[I] Step 2: loading native library")
             library = Native.load(soFile.absolutePath, IPBFLibrary::class.java)
             logBuffer.add("[I] Native.load OK")
         } catch (e: UnsatisfiedLinkError) {
             logBuffer.add("[E] UnsatisfiedLinkError: ${e.message}")
-            logBuffer.add("[E] This means the .so cannot be loaded. Check ABI match.")
             Logs.w("IPBF load error", e)
             return
         } catch (e: Throwable) {
@@ -112,28 +111,67 @@ object IPBFManager {
             logBuffer.add("[I] Starting IPBF...")
             logBuffer.add("[I] Config: ${configFile.absolutePath}")
 
-            val configPath = configFile.absolutePath
+            val configText = buildConfigWithAbsolutePaths(ipbfDir)
+            logBuffer.add("[I] Config text length: ${configText.length}")
+            logBuffer.add("[I] Config content:\n$configText")
 
-            val result = lib.ipbp_load_config(configPath)
-            logBuffer.add("[I] ipbp_load_config result: $result")
-            if (result != 0) {
-                logBuffer.add("[E] Config validation failed (code: $result)")
-                return
-            }
-            logBuffer.add("[I] Config validated OK")
-
-            handle = lib.ipbp_start_proxy(configPath, "", "")
+            handle = lib.ipbp_start_proxy_from_config(configText, "104.16.0.1")
 
             if (handle != null) {
                 logBuffer.add("[I] IPBF proxy started successfully")
             } else {
-                logBuffer.add("[E] ipbp_start_proxy returned NULL")
+                logBuffer.add("[E] ipbp_start_proxy_from_config returned NULL")
+                logBuffer.add("[I] Trying ipbp_start_proxy with file path...")
+                val result = lib.ipbp_load_config(configFile.absolutePath)
+                logBuffer.add("[I] ipbp_load_config result: $result")
+                handle = lib.ipbp_start_proxy(configFile.absolutePath, "104.16.0.1", "127.0.0.1")
+                if (handle != null) {
+                    logBuffer.add("[I] ipbp_start_proxy succeeded")
+                } else {
+                    logBuffer.add("[E] ipbp_start_proxy also returned NULL")
+                }
             }
         } catch (e: Throwable) {
             Logs.w("IPBF start failed", e)
             logBuffer.add("[E] Exception (${e.javaClass.simpleName}): ${e.message}")
             logBuffer.add("[E] ${e.stackTraceToString()}")
         }
+    }
+
+    private fun buildConfigWithAbsolutePaths(ipbfDir: File): String {
+        val ipListPath = File(ipbfDir, "ip_list.txt").absolutePath
+        return """
+MODE = "ip_bypass_plus"
+NO_TUI = true
+LISTEN_HOST = "127.0.0.1"
+LISTEN_PORT = 40443
+IP_POOL = 10
+MAX_IP_SCAN = 1000
+AUTO_SELECT = false
+BYPASS_METHOD = "tls_frag"
+IP_LIST = "$ipListPath"
+SCAN_TIMEOUT_SECS = 5
+RESCAN_INTERVAL_SECS = 0
+SNI_SWITCH_MIN_SCORE = 1
+IP_MAX_P1_CONCURRENT = 128
+IP_MAX_P2_CONCURRENT = 32
+SCAN_DOWNLOAD_CAP = 10240
+SCAN_UPLOAD_CAP = 10240
+SCAN_UPLOAD_PATH = "/"
+IP_SCAN_SNI = "cloudflare.com"
+TCP_LATENCY_CAP_MS = 500.0
+TLS_LATENCY_CAP_MS = 1000.0
+TTFB_CAP_MS = 2000.0
+SPEED_CAP_BPS = 2048000.0
+UPLOAD_SPEED_CAP_BPS = 2048000.0
+BYPASS_TIMEOUT_SECS = 20
+RELAY_MAX_LIFETIME_SECS = 0
+TLS_FRAG_PACKETS = "1-3"
+TLS_FRAG_LENGTH = "100-200"
+TLS_FRAG_INTERVAL_MS = "10-20"
+TCP_SEG_SIZE = 1
+TCP_SEG_NODELAY = true
+        """.trimIndent()
     }
 
     fun stop() {
