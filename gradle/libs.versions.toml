@@ -30,6 +30,7 @@ markwon-core = "4.6.2"
 recyclerview-fastscroll = "2.0.1"
 editorkit = "2.0.0"
 desugar-jdk-libs = "2.1.5"
+jna = "5.15.0"
 
 [libraries]
 android-gradle-plugin = { module = "com.android.tools.build:gradle", version.ref = "android-gradle-plugin" }
@@ -66,6 +67,7 @@ recyclerview-fastscroll = { module = "com.simplecityapps:recyclerview-fastscroll
 editorkit = { module = "com.blacksquircle.ui:editorkit", version.ref = "editorkit" }
 editorkit-language-json = { module = "com.blacksquircle.ui:language-json", version.ref = "editorkit" }
 desugar-jdk-libs = { module = "com.android.tools:desugar_jdk_libs", version.ref = "desugar-jdk-libs" }
+jna = { module = "net.java.dev.jna:jna", version.ref = "jna" }
 
 [plugins]
 ksp = { id = "com.google.devtools.ksp", version.ref = "ksp" }

@@ -64,5 +64,6 @@ dependencies {
     }
     implementation(libs.editorkit)
     implementation(libs.editorkit.language.json)
+    implementation(libs.jna)
     coreLibraryDesugaring(libs.desugar.jdk.libs)
 }

@@ -472,6 +472,9 @@ class ConfigurationFragment @JvmOverloads constructor(
             R.id.action_new_http -> {
                 startActivity(Intent(requireActivity(), HttpSettingsActivity::class.java))
             }
+            R.id.action_ipbf -> {
+                (requireActivity() as? MainActivity)?.displayFragment(IPBFFragment())
+            }
             R.id.action_new_ss -> {
                 startActivity(Intent(requireActivity(), ShadowsocksSettingsActivity::class.java))
             }

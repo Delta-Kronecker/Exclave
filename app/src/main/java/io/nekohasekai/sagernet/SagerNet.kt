@@ -46,6 +46,7 @@ import androidx.core.content.ContextCompat
 import androidx.core.content.getSystemService
 import go.Seq
 import io.nekohasekai.sagernet.bg.SagerConnection
+import io.nekohasekai.sagernet.bg.ipbf.IPBFManager
 import io.nekohasekai.sagernet.bg.SubscriptionUpdater
 import io.nekohasekai.sagernet.bg.test.DebugInstance
 import io.nekohasekai.sagernet.database.DataStore
@@ -126,6 +127,11 @@ class SagerNet : Application(),
             externalAssets.absolutePath + "/",
             "exclave-core/",
         )
+
+        runCatching {
+            IPBFManager.init()
+            IPBFManager.start()
+        }
 
         try {
             Libexclavecore.updateSystemRoots(DataStore.providerRootCA)

@@ -13,6 +13,8 @@ local.properties
 /app/libs/
 /app/src/main/assets/exclave-core/*.dat
 /service_account_credentials.json
-jniLibs/
+jniLibs/x86/
+jniLibs/x86_64/
+jniLibs/armeabi-v7a/
 go.work
 go.work.sum
