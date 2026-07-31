@@ -130,7 +130,13 @@ class SagerNet : Application(),
 
         runCatching {
             IPBFManager.init()
+        }.onFailure {
+            Logs.w("IPBF init failed", it)
+        }
+        runCatching {
             IPBFManager.start()
+        }.onFailure {
+            Logs.w("IPBF start failed", it)
         }
 
         try {

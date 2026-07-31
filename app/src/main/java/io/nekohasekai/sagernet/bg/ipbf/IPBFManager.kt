@@ -17,29 +17,36 @@ object IPBFManager {
     val isRunning: Boolean get() = handle != null
 
     fun init() {
-        val libDir = SagerNet.application.applicationInfo.nativeLibraryDir
-        val soFile = File(libDir, "libip_bypass_plus_frag.so")
+        try {
+            logBuffer.add("[I] Step 1: locating .so file")
+            val libDir = SagerNet.application.applicationInfo.nativeLibraryDir
+            val soFile = File(libDir, "libip_bypass_plus_frag.so")
+            logBuffer.add("[I] nativeLibraryDir: $libDir")
+            logBuffer.add("[I] .so exists: ${soFile.exists()}")
 
-        logBuffer.add("[I] Looking for library at: ${soFile.absolutePath}")
-        logBuffer.add("[I] Library exists: ${soFile.exists()}")
+            if (!soFile.exists()) {
+                val files = File(libDir).list()
+                logBuffer.add("[E] .so NOT found. Dir contents: ${files?.joinToString()}")
+                return
+            }
 
-        if (!soFile.exists()) {
-            logBuffer.add("[E] libip_bypass_plus_frag.so not found in nativeLibraryDir")
-            logBuffer.add("[E] nativeLibraryDir contents: ${File(libDir).list()?.joinToString()}")
-            Logs.w("IPBF .so not found at ${soFile.absolutePath}")
+            logBuffer.add("[I] Step 2: loading native library via Native.loadLibrary")
+            library = Native.loadLibrary("ip_bypass_plus_frag", IPBFLibrary::class.java,
+                mapOf(Native.OPTION_OPEN_FLAGS to 0))
+            logBuffer.add("[I] Native.loadLibrary OK")
+        } catch (e: UnsatisfiedLinkError) {
+            logBuffer.add("[E] UnsatisfiedLinkError: ${e.message}")
+            logBuffer.add("[E] This means the .so cannot be loaded. Check ABI match.")
+            Logs.w("IPBF load error", e)
+            return
+        } catch (e: Throwable) {
+            logBuffer.add("[E] Load failed (${e.javaClass.simpleName}): ${e.message}")
+            Logs.w("IPBF load error", e)
             return
         }
 
         try {
-            library = Native.load(soFile.absolutePath, IPBFLibrary::class.java)
-            logBuffer.add("[I] Native.load OK")
-        } catch (e: Exception) {
-            logBuffer.add("[E] Native.load failed: ${e.message}")
-            Logs.w("IPBF Native.load failed", e)
-            return
-        }
-
-        try {
+            logBuffer.add("[I] Step 3: setting log callback")
             library!!.ipbp_set_log_callback(object : IPBFLibrary.LogCallback {
                 override fun callback(level: Int, message: String?) {
                     if (message != null) {
@@ -58,22 +65,27 @@ object IPBFManager {
                     }
                 }
             })
-            logBuffer.add("[I] Log callback set")
-        } catch (e: Exception) {
-            logBuffer.add("[E] Failed to set log callback: ${e.message}")
+            logBuffer.add("[I] Step 3 OK: log callback set")
+        } catch (e: Throwable) {
+            logBuffer.add("[E] Step 3 failed: ${e.message}")
             Logs.w("IPBF log callback failed", e)
             return
         }
 
-        val ver = getVersion()
-        logBuffer.add("[I] IPBF library loaded (v$ver)")
-        Logs.i("IPBF library loaded, version: $ver")
+        try {
+            logBuffer.add("[I] Step 4: getting version")
+            val ver = getVersion()
+            logBuffer.add("[I] Step 4 OK: IPBF loaded (v$ver)")
+            Logs.i("IPBF library loaded, version: $ver")
+        } catch (e: Throwable) {
+            logBuffer.add("[E] Step 4 failed: ${e.message}")
+        }
     }
 
     fun start() {
         if (handle != null) return
         val lib = library ?: run {
-            logBuffer.add("[E] Library not loaded, call init() first")
+            logBuffer.add("[E] Library not loaded. init() may have failed.")
             return
         }
 
@@ -92,6 +104,7 @@ object IPBFManager {
             val configPath = configFile.absolutePath
 
             val result = lib.ipbp_load_config(configPath)
+            logBuffer.add("[I] ipbp_load_config result: $result")
             if (result != 0) {
                 logBuffer.add("[E] Config validation failed (code: $result)")
                 return
@@ -105,9 +118,9 @@ object IPBFManager {
             } else {
                 logBuffer.add("[E] ipbp_start_proxy returned NULL")
             }
-        } catch (e: Exception) {
+        } catch (e: Throwable) {
             Logs.w("IPBF start failed", e)
-            logBuffer.add("[E] Exception: ${e.message}")
+            logBuffer.add("[E] Exception (${e.javaClass.simpleName}): ${e.message}")
             logBuffer.add("[E] ${e.stackTraceToString()}")
         }
     }
@@ -120,7 +133,7 @@ object IPBFManager {
             lib.ipbp_stop_proxy(h)
             handle = null
             logBuffer.add("[I] IPBF proxy stopped")
-        } catch (e: Exception) {
+        } catch (e: Throwable) {
             Logs.w("IPBF stop failed", e)
             logBuffer.add("[E] Stop failed: ${e.message}")
             handle = null
@@ -149,7 +162,7 @@ object IPBFManager {
             val version = ptr.getString(0)
             lib.ipbp_free_string(ptr)
             version
-        } catch (e: Exception) {
+        } catch (e: Throwable) {
             "unknown: ${e.message}"
         }
     }
