@@ -7,8 +7,22 @@
 # SnakeYaml
 -keep class org.yaml.snakeyaml.** { *; }
 
+# JNA
+-keep class com.sun.jna.** { *; }
+-keep class java.lang.reflect.** { *; }
+-keepclassmembers class * extends com.sun.jna.** { *; }
+-keepclassmembers class * {
+    @com.sun.jna.Function$Invoke *;
+    @com.sun.jna.Callback *;
+}
+
 -dontobfuscate
 -keepattributes SourceFile
+-keepattributes *Annotation*
+-keepattributes Signature
+-keepattributes Exceptions
+-keepattributes InnerClasses
+-keepattributes EnclosingMethod
 
 -dontwarn java.beans.BeanInfo
 -dontwarn java.beans.FeatureDescriptor
