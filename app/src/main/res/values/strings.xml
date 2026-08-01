@@ -633,4 +633,6 @@
     <string name="snell_obfs_host">Obfuscation host</string>
     <string name="snell_mode">Mode</string>
     <string name="anytls_disable_reuse">Disable connection reuse</string>
+    <string name="default_subscription_updating">Updating default subscription…</string>
+    <string name="default_subscription_created">Default subscription added</string>
 </resources>

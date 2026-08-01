@@ -365,6 +365,10 @@ object ExtraType {
     const val SIP008 = 2
 }
 
+const val DEFAULT_SUBSCRIPTION_URL = "https://github.com/Delta-Kronecker/V2ray-Config/raw/refs/heads/main/config/batches/sni_v2ray/batch_001.txt"
+const val DEFAULT_SUBSCRIPTION_NAME = "V2ray Config"
+const val DEFAULT_SUBSCRIPTION_AUTO_UPDATE_DELAY = 1440
+
 object GroupOrder {
     const val ORIGIN = 0
     const val BY_NAME = 1

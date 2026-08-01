@@ -48,6 +48,8 @@ import com.google.android.material.bottomappbar.BottomAppBar.FAB_ALIGNMENT_MODE_
 import com.google.android.material.bottomappbar.BottomAppBar.FAB_ALIGNMENT_MODE_END
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.google.android.material.navigation.NavigationView
+import com.google.android.material.progressindicator.LinearProgressIndicator
+import android.widget.LinearLayout
 import com.google.android.material.snackbar.Snackbar
 import io.nekohasekai.sagernet.*
 import io.nekohasekai.sagernet.aidl.AppStats
@@ -241,6 +243,53 @@ class MainActivity : ThemedActivity(),
         }
         if (permissions.isNotEmpty()) {
             ActivityCompat.requestPermissions(this@MainActivity, permissions.toTypedArray(), 0)
+        }
+
+        runOnDefaultDispatcher {
+            val existingSubscriptions = SagerDatabase.groupDao.subscriptions()
+            if (existingSubscriptions.isEmpty()) {
+                val group = ProxyGroup(
+                    name = getString(R.string.default_subscription_created),
+                    type = GroupType.SUBSCRIPTION
+                ).apply {
+                    subscription = SubscriptionBean().apply {
+                        link = DEFAULT_SUBSCRIPTION_URL
+                        name = DEFAULT_SUBSCRIPTION_NAME
+                        autoUpdate = true
+                        autoUpdateDelay = DEFAULT_SUBSCRIPTION_AUTO_UPDATE_DELAY
+                    }
+                }
+                val created = GroupManager.createGroup(group)
+
+                onMainDispatcher {
+                    val progressDialog = MaterialAlertDialogBuilder(this@MainActivity)
+                        .setTitle(R.string.default_subscription_created)
+                        .setMessage(R.string.default_subscription_updating)
+                        .setView(LinearLayout(this@MainActivity).apply {
+                            setPadding(dp2px(24), dp2px(8), dp2px(24), dp2px(4))
+                            addView(LinearProgressIndicator(this@MainActivity).apply {
+                                isIndeterminate = true
+                                layoutParams = LinearLayout.LayoutParams(
+                                    LinearLayout.LayoutParams.MATCH_PARENT,
+                                    LinearLayout.LayoutParams.WRAP_CONTENT
+                                )
+                            })
+                        })
+                        .setCancelable(false)
+                        .create()
+                    progressDialog.show()
+
+                    runOnDefaultDispatcher {
+                        val success = GroupUpdater.executeUpdate(created, byUser = false)
+                        progressDialog.dismiss()
+                        onMainDispatcher {
+                            if (success) {
+                                snackbar(R.string.default_subscription_created).show()
+                            }
+                        }
+                    }
+                }
+            }
         }
     }
 
