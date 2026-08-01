@@ -15,6 +15,8 @@
     @com.sun.jna.Function$Invoke *;
     @com.sun.jna.Callback *;
 }
+-dontwarn java.awt.**
+-dontwarn com.sun.jna.**
 
 -dontobfuscate
 -keepattributes SourceFile
