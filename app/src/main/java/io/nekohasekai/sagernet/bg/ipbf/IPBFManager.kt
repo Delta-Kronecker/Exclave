@@ -1,10 +1,14 @@
 package io.nekohasekai.sagernet.bg.ipbf
 
+import android.os.ParcelFileDescriptor
+import android.system.Os
 import com.sun.jna.Native
 import com.sun.jna.Pointer
 import io.nekohasekai.sagernet.SagerNet
 import io.nekohasekai.sagernet.ktx.Logs
+import java.io.BufferedReader
 import java.io.File
+import java.io.InputStreamReader
 import java.util.concurrent.ConcurrentLinkedQueue
 
 object IPBFManager {
@@ -12,7 +16,7 @@ object IPBFManager {
     private var library: IPBFLibrary? = null
     private var handle: Pointer? = null
     private val logBuffer = ConcurrentLinkedQueue<String>()
-    private const val MAX_LOG_LINES = 2000
+    private const val MAX_LOG_LINES = 1000
 
     val isRunning: Boolean get() = handle != null
 
@@ -29,6 +33,9 @@ object IPBFManager {
                 logBuffer.add("[E] .so NOT found. Dir contents: ${files?.joinToString()}")
                 return
             }
+
+            logBuffer.add("[I] Step 1.5: redirecting native stdout/stderr")
+            redirectNativeOutput()
 
             logBuffer.add("[I] Step 2: loading native library")
             library = Native.load(soFile.absolutePath, IPBFLibrary::class.java)
@@ -55,11 +62,7 @@ object IPBFManager {
                             else -> "D"
                         }
                         val line = "[$prefix] $message"
-                        logBuffer.add(line)
-                        Logs.i("IPBF: $line")
-                        while (logBuffer.size > MAX_LOG_LINES) {
-                            logBuffer.poll()
-                        }
+                        addLog(line)
                     }
                 }
             })
@@ -92,6 +95,61 @@ object IPBFManager {
         }
     }
 
+    private fun addLog(line: String) {
+        logBuffer.add(line)
+        while (logBuffer.size > MAX_LOG_LINES) {
+            logBuffer.poll()
+        }
+    }
+
+    private fun redirectNativeOutput() {
+        try {
+            val stdoutPipe = ParcelFileDescriptor.createReliablePipe()
+            val stderrPipe = ParcelFileDescriptor.createReliablePipe()
+
+            Os.dup2(stdoutPipe[1].fileDescriptor, 1)
+            Os.dup2(stderrPipe[1].fileDescriptor, 2)
+            stdoutPipe[1].close()
+            stderrPipe[1].close()
+
+            Thread({
+                try {
+                    val reader = BufferedReader(InputStreamReader(ParcelFileDescriptor.AutoCloseInputStream(stdoutPipe[0])))
+                    reader.useLines { lines ->
+                        lines.forEach { line ->
+                            if (line.isNotBlank()) addLog("[N] $line")
+                        }
+                    }
+                } catch (e: Throwable) {
+                    Logs.w("stdout reader error", e)
+                }
+            }, "ipbf-stdout").apply {
+                isDaemon = true
+                start()
+            }
+
+            Thread({
+                try {
+                    val reader = BufferedReader(InputStreamReader(ParcelFileDescriptor.AutoCloseInputStream(stderrPipe[0])))
+                    reader.useLines { lines ->
+                        lines.forEach { line ->
+                            if (line.isNotBlank()) addLog("[N] $line")
+                        }
+                    }
+                } catch (e: Throwable) {
+                    Logs.w("stderr reader error", e)
+                }
+            }, "ipbf-stderr").apply {
+                isDaemon = true
+                start()
+            }
+
+            logBuffer.add("[I] stdout/stderr redirect OK")
+        } catch (e: Throwable) {
+            logBuffer.add("[W] Failed to redirect native stdout/stderr: ${e.message}")
+        }
+    }
+
     fun start() {
         if (handle != null) return
         val lib = library ?: run {
@@ -113,7 +171,6 @@ object IPBFManager {
 
             val configText = buildConfigWithAbsolutePaths(ipbfDir)
             logBuffer.add("[I] Config text length: ${configText.length}")
-            logBuffer.add("[I] Config content:\n$configText")
 
             handle = lib.ipbp_start_proxy_from_config(configText, "104.16.0.1")
 
@@ -142,7 +199,6 @@ object IPBFManager {
         val ipListPath = File(ipbfDir, "ip_list.txt").absolutePath
         return """
 MODE = "ip_bypass_plus"
-NO_TUI = true
 LISTEN_HOST = "127.0.0.1"
 LISTEN_PORT = 40443
 IP_POOL = 10
