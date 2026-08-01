@@ -1,14 +1,10 @@
 package io.nekohasekai.sagernet.bg.ipbf
 
-import android.os.ParcelFileDescriptor
-import android.system.Os
 import com.sun.jna.Native
 import com.sun.jna.Pointer
 import io.nekohasekai.sagernet.SagerNet
 import io.nekohasekai.sagernet.ktx.Logs
-import java.io.BufferedReader
 import java.io.File
-import java.io.InputStreamReader
 import java.util.concurrent.ConcurrentLinkedQueue
 
 object IPBFManager {
@@ -34,8 +30,7 @@ object IPBFManager {
                 return
             }
 
-            logBuffer.add("[I] Step 1.5: redirecting native stdout/stderr")
-            redirectNativeOutput()
+            logBuffer.add("[I] Step 1.5: skipping native stdout/stderr redirect (uses log callback)")
 
             logBuffer.add("[I] Step 2: loading native library")
             library = Native.load(soFile.absolutePath, IPBFLibrary::class.java)
@@ -99,54 +94,6 @@ object IPBFManager {
         logBuffer.add(line)
         while (logBuffer.size > MAX_LOG_LINES) {
             logBuffer.poll()
-        }
-    }
-
-    private fun redirectNativeOutput() {
-        try {
-            val stdoutPipe = ParcelFileDescriptor.createReliablePipe()
-            val stderrPipe = ParcelFileDescriptor.createReliablePipe()
-
-            Os.dup2(stdoutPipe[1].fileDescriptor, 1)
-            Os.dup2(stderrPipe[1].fileDescriptor, 2)
-            stdoutPipe[1].close()
-            stderrPipe[1].close()
-
-            Thread({
-                try {
-                    val reader = BufferedReader(InputStreamReader(ParcelFileDescriptor.AutoCloseInputStream(stdoutPipe[0])))
-                    reader.useLines { lines ->
-                        lines.forEach { line ->
-                            if (line.isNotBlank()) addLog("[N] $line")
-                        }
-                    }
-                } catch (e: Throwable) {
-                    Logs.w("stdout reader error", e)
-                }
-            }, "ipbf-stdout").apply {
-                isDaemon = true
-                start()
-            }
-
-            Thread({
-                try {
-                    val reader = BufferedReader(InputStreamReader(ParcelFileDescriptor.AutoCloseInputStream(stderrPipe[0])))
-                    reader.useLines { lines ->
-                        lines.forEach { line ->
-                            if (line.isNotBlank()) addLog("[N] $line")
-                        }
-                    }
-                } catch (e: Throwable) {
-                    Logs.w("stderr reader error", e)
-                }
-            }, "ipbf-stderr").apply {
-                isDaemon = true
-                start()
-            }
-
-            logBuffer.add("[I] stdout/stderr redirect OK")
-        } catch (e: Throwable) {
-            logBuffer.add("[W] Failed to redirect native stdout/stderr: ${e.message}")
         }
     }
 
