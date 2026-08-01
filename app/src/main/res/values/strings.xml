@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name" translatable="false">Exclave</string>
+    <string name="app_name" translatable="false">Exclave Plus</string>
     <string name="project">Project</string>
     <string name="github">Source code</string>
     <string name="app_version">Version</string>

@@ -121,6 +121,8 @@ fun Project.setupAppCommon(projectName: String = "") {
             vcsInfo.include = false
             signingConfigs.findByName("release")?.let {
                 signingConfig = it
+            } ?: run {
+                signingConfig = signingConfigs.getByName("debug")
             }
             ndk.debugSymbolLevel = "NONE"
         }
@@ -229,7 +231,7 @@ fun Project.setupApp() {
                 (output as? VariantOutputImpl)?.let { variantOutputImpl ->
                     val versionName = variantOutputImpl.versionName.orNull.orEmpty()
                     variantOutputImpl.outputFileName.set(variantOutputImpl.outputFileName.get()
-                        .replace(project.name, "Exclave-$versionName")
+                        .replace(project.name, "Exclave-Plus-$versionName")
                         .replace("-release", "")
                         .replace("-oss", "")
                     )
