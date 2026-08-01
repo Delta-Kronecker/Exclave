@@ -146,7 +146,7 @@ object DataStore : OnPreferenceDataStoreChangeListener {
     var allowAccess by configurationStore.boolean(Key.ALLOW_ACCESS)
     var speedInterval by configurationStore.stringToInt(Key.SPEED_INTERVAL)
 
-    var remoteDns by configurationStore.stringNotBlack(Key.REMOTE_DNS) { "tcp://1.1.1.1" }
+    var remoteDns by configurationStore.stringNotBlack(Key.REMOTE_DNS) { "tcp://8.8.8.8" }
     var directDns by configurationStore.stringNotBlack(Key.DIRECT_DNS) {
         val locale = when {
             Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU -> SagerNet.locale.systemLocales[0]!!
@@ -157,7 +157,7 @@ object DataStore : OnPreferenceDataStoreChangeListener {
             "CN" -> "tcp://223.5.5.5"
             "IR" -> "tcp://178.22.122.100"
             "RU" -> "tcp://77.88.8.8"
-            else -> "tcp://1.1.1.1"
+            else -> "tcp://8.8.8.8"
         }
     }
     var bootstrapDns by configurationStore.stringNotBlack(Key.BOOTSTRAP_DNS)
