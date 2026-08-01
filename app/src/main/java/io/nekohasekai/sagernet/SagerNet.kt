@@ -128,15 +128,17 @@ class SagerNet : Application(),
             "exclave-core/",
         )
 
-        runCatching {
-            IPBFManager.init()
-        }.onFailure {
-            Logs.w("IPBF init failed", it)
-        }
-        runCatching {
-            IPBFManager.start()
-        }.onFailure {
-            Logs.w("IPBF start failed", it)
+        runOnDefaultDispatcher {
+            runCatching {
+                IPBFManager.init()
+            }.onFailure {
+                Logs.w("IPBF init failed", it)
+            }
+            runCatching {
+                IPBFManager.start()
+            }.onFailure {
+                Logs.w("IPBF start failed", it)
+            }
         }
 
         try {
