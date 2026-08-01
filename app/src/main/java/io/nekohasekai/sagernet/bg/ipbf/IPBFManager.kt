@@ -199,7 +199,6 @@ object IPBFManager {
         val ipListPath = File(ipbfDir, "ip_list.txt").absolutePath
         return """
 MODE = "ip_bypass_plus"
-NO_TUI = true
 LISTEN_HOST = "127.0.0.1"
 LISTEN_PORT = 40443
 IP_POOL = 10
