@@ -250,7 +250,7 @@ object DataStore : OnPreferenceDataStoreChangeListener {
 
     var enableVPNInterfaceIPv6Address by configurationStore.boolean(Key.ENABLE_VPN_INTERFACE_IPV6_ADDRESS)
 
-    var meteredNetwork by configurationStore.boolean(Key.METERED_NETWORK)
+    var meteredNetwork by configurationStore.boolean(Key.METERED_NETWORK) { true }
     var proxyApps by configurationStore.boolean(Key.PROXY_APPS)
     var bypass by configurationStore.boolean(Key.BYPASS_MODE) { true }
     var individual by configurationStore.string(Key.INDIVIDUAL)
@@ -281,7 +281,7 @@ object DataStore : OnPreferenceDataStoreChangeListener {
 
     var discardICMP by configurationStore.boolean(Key.DISCARD_ICMP)
 
-    var appTrafficStatistics by configurationStore.boolean(Key.APP_TRAFFIC_STATISTICS)
+    var appTrafficStatistics by configurationStore.boolean(Key.APP_TRAFFIC_STATISTICS) { true }
     var profileTrafficStatistics by configurationStore.boolean(Key.PROFILE_TRAFFIC_STATISTICS) { true }
 
     // protocol
