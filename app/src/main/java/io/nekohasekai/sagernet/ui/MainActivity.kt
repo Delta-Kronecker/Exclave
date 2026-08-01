@@ -25,6 +25,7 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.Manifest
 import android.net.Uri
+import android.net.VpnService
 import android.os.Build
 import android.os.Bundle
 import android.os.RemoteException
@@ -36,6 +37,7 @@ import android.view.View
 import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.OnBackPressedCallback
+import androidx.activity.result.ActivityResultLauncher
 import androidx.annotation.IdRes
 import androidx.appcompat.app.AlertDialog
 import androidx.core.app.ActivityCompat
@@ -79,6 +81,11 @@ class MainActivity : ThemedActivity(),
     lateinit var navigation: NavigationView
 
     val userInterface by lazy { GroupInterfaceAdapter(this) }
+
+    private val vpnPermissionLauncher: ActivityResultLauncher<Intent> =
+        registerForActivityResult(
+            androidx.activity.result.contract.ActivityResultContracts.StartActivityForResult()
+        ) { /* result ignored, VPN service starts on its own */ }
 
     override val onBackPressedCallback = object : OnBackPressedCallback(enabled = false) {
         override fun handleOnBackPressed() {
@@ -244,6 +251,16 @@ class MainActivity : ThemedActivity(),
         }
         if (permissions.isNotEmpty()) {
             ActivityCompat.requestPermissions(this@MainActivity, permissions.toTypedArray(), 0)
+        }
+
+        if (DataStore.serviceMode == Key.MODE_VPN) {
+            try {
+                VpnService.prepare(this@MainActivity)?.let { intent ->
+                    vpnPermissionLauncher.launch(intent)
+                }
+            } catch (e: Exception) {
+                Logs.w(e)
+            }
         }
 
         runOnDefaultDispatcher {
