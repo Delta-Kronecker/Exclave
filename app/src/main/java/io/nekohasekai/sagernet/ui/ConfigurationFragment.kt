@@ -475,6 +475,14 @@ class ConfigurationFragment @JvmOverloads constructor(
             R.id.action_ipbf -> {
                 (requireActivity() as? MainActivity)?.displayFragment(IPBFFragment())
             }
+            R.id.action_telegram -> {
+                try {
+                    val intent = Intent(Intent.ACTION_VIEW, android.net.Uri.parse("https://t.me/DeltaKroneckerGithub"))
+                    startActivity(intent)
+                } catch (e: Exception) {
+                    snackbar(e.readableMessage).show()
+                }
+            }
             R.id.action_new_ss -> {
                 startActivity(Intent(requireActivity(), ShadowsocksSettingsActivity::class.java))
             }
