@@ -81,8 +81,8 @@ TLS_RECORD_FRAG_BUMP_IP_IDENT = true
 # tls_frag parameters
 # ---------------------------------------------------------------------------
 
-TLS_FRAG_PACKETS = "1-3"
-TLS_FRAG_LENGTH = "100-200"
-TLS_FRAG_INTERVAL_MS = "10-20"
-TCP_SEG_SIZE = 1
+TLS_FRAG_PACKETS = "tlshello"
+TLS_FRAG_LENGTH = "5-94"
+TLS_FRAG_INTERVAL_MS = "0"
+TCP_SEG_SIZE = 5
 TCP_SEG_NODELAY = true
