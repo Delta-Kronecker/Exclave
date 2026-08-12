@@ -477,6 +477,11 @@ object DataStore : OnPreferenceDataStoreChangeListener {
     var rulesFirstCreate by configurationStore.boolean(Key.RULES_FIRST_CREATE)
     var doNotShowRuleExportWarning by configurationStore.boolean(Key.DO_NOT_SHOW_RULE_EXPORT_WARNING)
 
+    var ipbfTlsFragPackets by configurationStore.string(Key.IPBF_TLS_FRAG_PACKETS) { "1-3" }
+    var ipbfTlsFragLength by configurationStore.string(Key.IPBF_TLS_FRAG_LENGTH) { "5-40" }
+    var ipbfTlsFragInterval by configurationStore.string(Key.IPBF_TLS_FRAG_INTERVAL) { "1" }
+    var ipbfTcpSegSize by configurationStore.string(Key.IPBF_TCP_SEG_SIZE) { "1" }
+
     var getInstalledPackagesInited by configurationStore.boolean("getInstalledPackagesInited")
     var postNotificationsPermissionRequested by configurationStore.boolean("postNotificationsPermissionRequested")
     var accessLocalNetworkPermissionRequested by configurationStore.boolean("accessLocalNetworkPermissionRequested")

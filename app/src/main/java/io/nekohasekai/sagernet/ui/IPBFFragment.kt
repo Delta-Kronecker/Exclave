@@ -14,6 +14,7 @@ import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.updatePadding
 import io.nekohasekai.sagernet.R
 import io.nekohasekai.sagernet.bg.ipbf.IPBFManager
+import io.nekohasekai.sagernet.database.DataStore
 import io.nekohasekai.sagernet.databinding.LayoutIpbfBinding
 import io.nekohasekai.sagernet.ktx.*
 
@@ -24,10 +25,10 @@ class IPBFFragment : ToolbarFragment(R.layout.layout_ipbf),
     private val handler = Handler(Looper.getMainLooper())
     private val logRunnable = object : Runnable {
         override fun run() {
-            if (isAdded) {
+            if (isAdded && ::binding.isInitialized && binding.ipbfLogsContainer.visibility == View.VISIBLE) {
                 updateLogs()
-                handler.postDelayed(this, 500)
             }
+            handler.postDelayed(this, 500)
         }
     }
 
@@ -55,6 +56,10 @@ class IPBFFragment : ToolbarFragment(R.layout.layout_ipbf),
 
         updateStatus()
         binding.ipbfCidrInput.setText(IPBFManager.getCidrRange())
+        binding.ipbfFragPackets.setText(DataStore.ipbfTlsFragPackets)
+        binding.ipbfFragLength.setText(DataStore.ipbfTlsFragLength)
+        binding.ipbfFragInterval.setText(DataStore.ipbfTlsFragInterval)
+        binding.ipbfTcpSegSize.setText(DataStore.ipbfTcpSegSize)
 
         binding.ipbfToggle.setOnClickListener {
             if (IPBFManager.isRunning) {
@@ -67,15 +72,26 @@ class IPBFFragment : ToolbarFragment(R.layout.layout_ipbf),
 
         binding.ipbfApply.setOnClickListener {
             val cidr = binding.ipbfCidrInput.text?.toString()?.trim() ?: ""
+            DataStore.ipbfTlsFragPackets = binding.ipbfFragPackets.text?.toString()?.trim()?.ifEmpty { "1-3" } ?: "1-3"
+            DataStore.ipbfTlsFragLength = binding.ipbfFragLength.text?.toString()?.trim()?.ifEmpty { "5-40" } ?: "5-40"
+            DataStore.ipbfTlsFragInterval = binding.ipbfFragInterval.text?.toString()?.trim()?.ifEmpty { "1" } ?: "1"
+            DataStore.ipbfTcpSegSize = binding.ipbfTcpSegSize.text?.toString()?.trim()?.ifEmpty { "1" } ?: "1"
             if (cidr.isNotEmpty()) {
                 IPBFManager.setCidrRange(cidr)
-                if (IPBFManager.isRunning) {
-                    IPBFManager.stop()
-                    IPBFManager.start()
-                }
-                updateStatus()
-                snackbar(R.string.ipbf_range_applied).show()
             }
+            if (IPBFManager.isRunning) {
+                IPBFManager.stop()
+                IPBFManager.start()
+            }
+            updateStatus()
+            snackbar(R.string.ipbf_settings_applied).show()
+        }
+
+        binding.ipbfToggleLogs.setOnClickListener {
+            val show = binding.ipbfLogsContainer.visibility != View.VISIBLE
+            binding.ipbfLogsContainer.visibility = if (show) View.VISIBLE else View.GONE
+            binding.ipbfToggleLogs.text = getString(if (show) R.string.ipbf_hide_logs else R.string.ipbf_show_logs)
+            if (show) updateLogs()
         }
 
         binding.ipbfCopyLog.setOnClickListener {
@@ -118,7 +134,11 @@ class IPBFFragment : ToolbarFragment(R.layout.layout_ipbf),
         if (logs.isNotEmpty()) {
             binding.ipbfLogsText.text = logs.joinToString("\n")
             binding.ipbfLogsScroll.post {
-                binding.ipbfLogsScroll.fullScroll(View.FOCUS_DOWN)
+                if (!binding.ipbfCidrInput.hasFocus()) {
+                    binding.ipbfLogsScroll.getChildAt(0)?.let {
+                        binding.ipbfLogsScroll.scrollTo(0, it.height)
+                    }
+                }
             }
         }
     }

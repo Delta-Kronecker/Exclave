@@ -3,6 +3,7 @@ package io.nekohasekai.sagernet.bg.ipbf
 import com.sun.jna.Native
 import com.sun.jna.Pointer
 import io.nekohasekai.sagernet.SagerNet
+import io.nekohasekai.sagernet.database.DataStore
 import io.nekohasekai.sagernet.ktx.Logs
 import java.io.File
 import java.util.concurrent.ConcurrentLinkedQueue
@@ -144,6 +145,10 @@ object IPBFManager {
 
     private fun buildConfigWithAbsolutePaths(ipbfDir: File): String {
         val ipListPath = File(ipbfDir, "ip_list.txt").absolutePath
+        val fragPackets = DataStore.ipbfTlsFragPackets
+        val fragLength = DataStore.ipbfTlsFragLength
+        val fragInterval = DataStore.ipbfTlsFragInterval
+        val tcpSegSize = DataStore.ipbfTcpSegSize
         return """
 MODE = "ip_bypass_plus"
 NO_TUI = true
@@ -170,10 +175,10 @@ SPEED_CAP_BPS = 2048000.0
 UPLOAD_SPEED_CAP_BPS = 2048000.0
 BYPASS_TIMEOUT_SECS = 20
 RELAY_MAX_LIFETIME_SECS = 0
-TLS_FRAG_PACKETS = "1-3"
-TLS_FRAG_LENGTH = "5-40"
-TLS_FRAG_INTERVAL_MS = "1"
-TCP_SEG_SIZE = 1
+TLS_FRAG_PACKETS = "$fragPackets"
+TLS_FRAG_LENGTH = "$fragLength"
+TLS_FRAG_INTERVAL_MS = "$fragInterval"
+TCP_SEG_SIZE = "$tcpSegSize"
 TCP_SEG_NODELAY = true
         """.trimIndent()
     }

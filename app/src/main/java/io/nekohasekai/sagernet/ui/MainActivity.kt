@@ -236,18 +236,23 @@ class MainActivity : ThemedActivity(),
         runOnDefaultDispatcher {
             val existingSubscriptions = SagerDatabase.groupDao.subscriptions()
             if (existingSubscriptions.isEmpty()) {
-                val group = ProxyGroup(
-                    name = getString(R.string.default_subscription_created),
-                    type = GroupType.SUBSCRIPTION
-                ).apply {
-                    subscription = SubscriptionBean().apply {
-                        link = DEFAULT_SUBSCRIPTION_URL
-                        name = DEFAULT_SUBSCRIPTION_NAME
-                        autoUpdate = true
-                        autoUpdateDelay = DEFAULT_SUBSCRIPTION_AUTO_UPDATE_DELAY
+                val defaultSubscriptions = listOf(
+                    DEFAULT_SUBSCRIPTION_URL to DEFAULT_SUBSCRIPTION_NAME,
+                    DEFAULT_SUBSCRIPTION_URL_2 to DEFAULT_SUBSCRIPTION_NAME_2
+                ).map { (link, name) ->
+                    ProxyGroup(
+                        name = getString(R.string.default_subscription_created),
+                        type = GroupType.SUBSCRIPTION
+                    ).apply {
+                        subscription = SubscriptionBean().apply {
+                            this.link = link
+                            this.name = name
+                            autoUpdate = true
+                            autoUpdateDelay = DEFAULT_SUBSCRIPTION_AUTO_UPDATE_DELAY
+                        }
                     }
                 }
-                val created = GroupManager.createGroup(group)
+                val createdGroups = defaultSubscriptions.map { GroupManager.createGroup(it) }
 
                 onMainDispatcher {
                     val progressDialog = MaterialAlertDialogBuilder(this@MainActivity)
@@ -268,7 +273,10 @@ class MainActivity : ThemedActivity(),
                     progressDialog.show()
 
                     runOnDefaultDispatcher {
-                        val success = GroupUpdater.executeUpdate(created, byUser = false)
+                        var success = false
+                        for (group in createdGroups) {
+                            success = GroupUpdater.executeUpdate(group, byUser = false) || success
+                        }
                         progressDialog.dismiss()
                         onMainDispatcher {
                             if (success) {
