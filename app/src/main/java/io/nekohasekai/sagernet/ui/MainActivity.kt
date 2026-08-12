@@ -239,14 +239,13 @@ class MainActivity : ThemedActivity(),
                 val defaultSubscriptions = listOf(
                     DEFAULT_SUBSCRIPTION_URL to DEFAULT_SUBSCRIPTION_NAME,
                     DEFAULT_SUBSCRIPTION_URL_2 to DEFAULT_SUBSCRIPTION_NAME_2
-                ).map { (link, name) ->
+                ).map { (link, subName) ->
                     ProxyGroup(
-                        name = getString(R.string.default_subscription_created),
+                        name = subName,
                         type = GroupType.SUBSCRIPTION
                     ).apply {
                         subscription = SubscriptionBean().apply {
                             this.link = link
-                            this.name = name
                             autoUpdate = true
                             autoUpdateDelay = DEFAULT_SUBSCRIPTION_AUTO_UPDATE_DELAY
                         }

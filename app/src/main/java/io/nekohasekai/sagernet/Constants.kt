@@ -333,6 +333,11 @@ object Key {
     const val RULES_FIRST_CREATE = "rulesFirstCreate"
     const val DO_NOT_SHOW_RULE_EXPORT_WARNING = "doNotShowRuleExportWarning"
 
+    const val IPBF_TLS_FRAG_PACKETS = "ipbfTlsFragPackets"
+    const val IPBF_TLS_FRAG_LENGTH = "ipbfTlsFragLength"
+    const val IPBF_TLS_FRAG_INTERVAL = "ipbfTlsFragInterval"
+    const val IPBF_TCP_SEG_SIZE = "ipbfTcpSegSize"
+
 }
 
 object TunImplementation {
@@ -370,11 +375,6 @@ const val DEFAULT_SUBSCRIPTION_NAME = "V2ray Config"
 const val DEFAULT_SUBSCRIPTION_URL_2 = "https://github.com/Delta-Kronecker/V2ray-Config/raw/refs/heads/main/config/batches/sni_v2ray/batch_002.txt"
 const val DEFAULT_SUBSCRIPTION_NAME_2 = "V2ray Config 2"
 const val DEFAULT_SUBSCRIPTION_AUTO_UPDATE_DELAY = 1440
-
-const val IPBF_TLS_FRAG_PACKETS = "ipbfTlsFragPackets"
-const val IPBF_TLS_FRAG_LENGTH = "ipbfTlsFragLength"
-const val IPBF_TLS_FRAG_INTERVAL = "ipbfTlsFragInterval"
-const val IPBF_TCP_SEG_SIZE = "ipbfTcpSegSize"
 
 object GroupOrder {
     const val ORIGIN = 0
