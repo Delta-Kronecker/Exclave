@@ -62,6 +62,20 @@ jobs:
         with:
           path: ~/.gradle
           key: gradle-${{ hashFiles('**/*.gradle.kts') }}
+      - name: Set App Version from Tag
+        if: github.event.inputs.tag != ''
+        shell: bash
+        run: |
+          TAG="${{ github.event.inputs.tag }}"
+          VER="${TAG#v}"
+          MAJOR=$(echo "$VER" | cut -d. -f1 | grep -o '[0-9]*' | head -1)
+          MINOR=$(echo "$VER" | cut -d. -f2 | grep -o '[0-9]*' | head -1)
+          PATCH=$(echo "$VER" | cut -d. -f3 | grep -o '[0-9]*' | head -1)
+          CODE=$(( MAJOR * 10000 + MINOR * 100 + PATCH ))
+          if [ "$CODE" -eq 0 ]; then CODE=1; fi
+          sed -i "s/^VERSION_NAME=.*/VERSION_NAME=${VER}/" version.properties
+          sed -i "s/^VERSION_CODE=.*/VERSION_CODE=${CODE}/" version.properties
+          cat version.properties
       - name: Gradle Build
         run: |
           echo "sdk.dir=${ANDROID_HOME}" > local.properties
