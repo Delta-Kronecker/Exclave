@@ -12,6 +12,7 @@ build/
 local.properties
 /app/libs/
 /app/src/main/assets/exclave-core/*.dat
+/app/src/main/jniLibs/arm64-v8a/*.so
 /service_account_credentials.json
 jniLibs/x86/
 jniLibs/x86_64/
