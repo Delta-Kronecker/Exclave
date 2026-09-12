@@ -374,12 +374,13 @@ pub fn run_ip_scan_progress(
     loop {
         loop {
             match rx.try_recv() {
-                Ok(IpScanEvent::TcpDone { tcp_tested }) => {
+                Ok(IpScanEvent::TcpDone { tcp_tested, .. }) => {
                     tcp_done = tcp_tested;
                 }
                 Ok(IpScanEvent::ProbeComplete(entry)) => {
                     arrived.push(entry);
                 }
+                Ok(IpScanEvent::Phase1Done { .. } | IpScanEvent::Phase2Done { .. }) => {}
                 Err(mpsc::error::TryRecvError::Empty) => break,
                 Err(mpsc::error::TryRecvError::Disconnected) => {
                     draw_ip_scan_progress(terminal, &arrived, tcp_done, total_ips)?;

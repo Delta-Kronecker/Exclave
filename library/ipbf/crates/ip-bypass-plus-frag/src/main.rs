@@ -912,7 +912,7 @@ async fn scan_ip_list_headless(
         let mut probe_completed = 0usize;
         while let Some(event) = rx.recv().await {
             match event {
-                IpScanEvent::TcpDone { tcp_tested } => {
+                IpScanEvent::TcpDone { tcp_tested, .. } => {
                     progress_events.emit(RuntimeEvent::ScanProgress {
                         scan: ScanKind::Ip,
                         phase: Some("tcp".to_owned()),
@@ -935,6 +935,7 @@ async fn scan_ip_list_headless(
                         score: Some(entry.score),
                     });
                 }
+                IpScanEvent::Phase1Done { .. } | IpScanEvent::Phase2Done { .. } => {}
             }
         }
     });

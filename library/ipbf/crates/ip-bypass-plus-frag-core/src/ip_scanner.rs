@@ -45,11 +45,16 @@ const SCAN_PORT: u16 = 443;
 #[derive(Debug, Clone)]
 pub enum IpScanEvent {
     /// One IP completed Phase 1 (TCP connect), whether or not it succeeded.
-    /// `tcp_tested` is the running count of Phase 1 completions so far.
-    TcpDone { tcp_tested: usize },
+    /// `tcp_tested` is the running count and `tcp_ok` the count of successful
+    /// connects so far.
+    TcpDone { tcp_tested: usize, tcp_ok: usize },
     /// One IP completed Phase 2+3 (TLS + TTFB); the full probe result is
     /// included regardless of whether TLS succeeded.
     ProbeComplete(IpProbeEntry),
+    /// All Phase 1 connects are done; TLS/TTFB probing has started.
+    Phase1Done { tcp_ok: usize, elapsed_ms: u64 },
+    /// Phase 2+3 finished (or was stopped early by the MAX_IP_SCAN limit).
+    Phase2Done { probed: usize, tls_ok: usize, healthy: usize, elapsed_ms: u64 },
 }
 
 /// Result for one scanned IP address.
@@ -297,6 +302,7 @@ pub async fn scan_ip_list(
     if ips.is_empty() {
         return Vec::new();
     }
+    let scan_started = Instant::now();
 
     // -----------------------------------------------------------------------
     // Phase 1: TCP connect (all IPs, high concurrency)
@@ -329,12 +335,16 @@ pub async fn scan_ip_list(
     // Process Phase 1 results as they arrive; immediately pipeline into Phase 2.
     let mut tcp_results: Vec<(IpAddr, Option<u64>)> = Vec::with_capacity(total);
     let mut tcp_tested: usize = 0;
+    let mut tcp_ok: usize = 0;
     while let Some((ip, tcp_ms)) = p1_rx.recv().await {
         tcp_tested += 1;
+        if tcp_ms.is_some() {
+            tcp_ok += 1;
+        }
         tcp_results.push((ip, tcp_ms));
 
         if let Some(ref ptx) = progress_tx {
-            let _ = ptx.send(IpScanEvent::TcpDone { tcp_tested });
+            let _ = ptx.send(IpScanEvent::TcpDone { tcp_tested, tcp_ok });
         }
 
         if let Some(ms) = tcp_ms {
@@ -355,11 +365,23 @@ pub async fn scan_ip_list(
     }
     // All Phase 1 done — drop p2_tx so p2_rx closes when all spawns finish.
     drop(p2_tx);
+    if let Some(ref ptx) = progress_tx {
+        let _ = ptx.send(IpScanEvent::Phase1Done {
+            tcp_ok,
+            elapsed_ms: scan_started.elapsed().as_millis() as u64,
+        });
+    }
 
     let mut tls_results: std::collections::HashMap<IpAddr, IpProbeEntry> =
         std::collections::HashMap::new();
     let healthy_count = std::sync::atomic::AtomicUsize::new(0);
+    let mut probed = 0usize;
+    let mut tls_ok = 0usize;
     while let Some(entry) = p2_rx.recv().await {
+        probed += 1;
+        if entry.tls_ok {
+            tls_ok += 1;
+        }
         let is_healthy = entry.tcp_latency_ms.is_some()
             && entry.tls_ok
             && entry.cert_valid
@@ -374,6 +396,15 @@ pub async fn scan_ip_list(
             }
         }
         tls_results.insert(entry.ip, entry);
+    }
+
+    if let Some(ref ptx) = progress_tx {
+        let _ = ptx.send(IpScanEvent::Phase2Done {
+            probed,
+            tls_ok,
+            healthy: healthy_count.load(std::sync::atomic::Ordering::Relaxed),
+            elapsed_ms: scan_started.elapsed().as_millis() as u64,
+        });
     }
 
     // Build final list: merge TCP failures + TLS results.

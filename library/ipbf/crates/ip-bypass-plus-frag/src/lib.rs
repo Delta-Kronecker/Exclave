@@ -311,34 +311,117 @@ fn spawn_background_ip_rescan(
             let scan_sni: Arc<str> = Arc::from(cfg.IP_SCAN_SNI.as_str());
             let scan_timeout = std::time::Duration::from_secs(cfg.SCAN_TIMEOUT_SECS);
             let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel::<IpScanEvent>();
-            let progress = tokio::spawn(async move {
+            let mut progress = tokio::spawn(async move {
                 let mut tcp_done = 0usize;
+                let mut p2_count = 0usize;
                 let mut tls_ok = 0usize;
+                let mut healthy = 0usize;
                 let mut last_pct = 0usize;
+                let mut last_p2_report = 0usize;
                 while let Some(evt) = rx.recv().await {
                     match evt {
-                        IpScanEvent::TcpDone { tcp_tested } => tcp_done = tcp_tested,
+                        IpScanEvent::TcpDone { tcp_tested, tcp_ok: ok } => {
+                            tcp_done = tcp_tested;
+                            let pct = if scanned > 0 {
+                                tcp_done * 100 / scanned
+                            } else {
+                                100
+                            };
+                            if pct >= last_pct + 10 {
+                                emit_log(
+                                    0,
+                                    &format!(
+                                        "rescan #{cycle}: p1 tcp {tcp_done}/{scanned} ({pct}%) | ok {ok}"
+                                    ),
+                                );
+                                last_pct = (pct / 10) * 10;
+                            }
+                        }
                         IpScanEvent::ProbeComplete(entry) => {
+                            p2_count += 1;
                             if entry.tls_ok {
                                 tls_ok += 1;
                             }
+                            if entry.tcp_latency_ms.is_some()
+                                && entry.tls_ok
+                                && entry.cert_valid
+                                && entry.ttfb_ms.is_some()
+                                && entry.download_bps.is_some()
+                                && entry.upload_bps.is_some()
+                            {
+                                healthy += 1;
+                            }
+                            if p2_count >= last_p2_report + 50 {
+                                emit_log(
+                                    0,
+                                    &format!(
+                                        "rescan #{cycle}: p2 tls {p2_count} probed | tls ok {tls_ok} | healthy {healthy}"
+                                    ),
+                                );
+                                last_p2_report = p2_count;
+                            }
                         }
-                    }
-                    let pct = if scanned > 0 { tcp_done * 100 / scanned } else { 100 };
-                    if pct >= last_pct + 25 {
-                        emit_log(
-                            0,
-                            &format!(
-                                "rescan #{cycle}: tcp {tcp_done}/{scanned} ({pct}%) | tls ok {tls_ok}"
-                            ),
-                        );
-                        last_pct = (pct / 25) * 25;
+                        IpScanEvent::Phase1Done { tcp_ok: ok, elapsed_ms } => {
+                            if ok == 0 {
+                                emit_log(
+                                    2,
+                                    &format!(
+                                        "rescan #{cycle}: phase 1 done — NO TCP connect accepted (0/{tcp_done}), scan is wasted; skipping TLS phase"
+                                    ),
+                                );
+                            } else {
+                                emit_log(
+                                    0,
+                                    &format!(
+                                        "rescan #{cycle}: phase 1 done — tcp ok {ok}/{tcp_done} in {elapsed_ms} ms; starting TLS/TTFB probes"
+                                    ),
+                                );
+                            }
+                        }
+                        IpScanEvent::Phase2Done {
+                            probed: p,
+                            tls_ok: to,
+                            healthy: h,
+                            elapsed_ms,
+                        } => {
+                            emit_log(
+                                0,
+                                &format!(
+                                    "rescan #{cycle}: phase 2 done — {p} probed, tls ok {to}, healthy {h} in {elapsed_ms} ms"
+                                ),
+                            );
+                        }
                     }
                 }
             });
 
-            let entries =
-                scan_ip_list(ips, scan_sni, scan_timeout, cfg.clone(), Some(tx)).await;
+            // Hard deadline for the whole scan so a stuck network phase can
+            // never wedge the rescan loop; on timeout we keep the active IP.
+            let scan_deadline = std::time::Duration::from_secs(120);
+            let scan_fut = async {
+                scan_ip_list(ips, scan_sni, scan_timeout, cfg.clone(), Some(tx)).await
+            };
+            let entries = match tokio::time::timeout(scan_deadline, scan_fut).await {
+                Ok(entries) => entries,
+                Err(_) => {
+                    progress.abort();
+                    emit_log(
+                        2,
+                        &format!(
+                            "rescan #{cycle}: scan did not finish within {}s — aborting this cycle, keeping current active IP",
+                            scan_deadline.as_secs()
+                        ),
+                    );
+                    let final_active = *active_ip.read().unwrap();
+                    emit_log(0, &format!("active_ip={final_active}"));
+                    tokio::time::sleep(interval).await;
+                    continue;
+                }
+            };
+            // Let the (aborted) progress task drain any last phase-report line,
+            // then make sure it is gone so we never block on it.
+            let _ = tokio::time::timeout(std::time::Duration::from_millis(300), &mut progress).await;
+            progress.abort();
             let _ = progress.await;
 
             let elapsed_ms = started.elapsed().as_millis();
@@ -358,12 +441,22 @@ fn spawn_background_ip_rescan(
                 emit_log(0, &format!("  {:>2}. {}{}", rank + 1, e.summary_line(), marker));
             }
 
-            let Some(best) = entries.first() else {
-                emit_log(2, &format!("rescan #{cycle}: no usable results"));
+            // Only a candidate that completed a real TLS handshake may replace
+            // the active IP; a bare TCP responder would break client handshakes.
+            let current = *active_ip.read().unwrap();
+            let best = entries.iter().find(|e| e.tls_ok);
+            let Some(best) = best else {
+                emit_log(
+                    2,
+                    &format!(
+                        "rescan #{cycle}: no TLS-OK candidate in this sample — keeping {current}"
+                    ),
+                );
+                emit_log(0, &format!("active_ip={current}"));
+                tokio::time::sleep(interval).await;
                 continue;
             };
 
-            let current = *active_ip.read().unwrap();
             let cur_score = *current_score.read().unwrap();
             let cur_score_str = cur_score
                 .map(|s| s.to_string())
