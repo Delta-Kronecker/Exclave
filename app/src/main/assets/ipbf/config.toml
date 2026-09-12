@@ -15,7 +15,7 @@ MODE = "ip_bypass_plus"
 AUTO_SELECT = false
 SELECTED_IP = ""
 IP_POOL = 10
-MAX_IP_SCAN = 1000
+MAX_IP_SCAN = 400
 
 # ---------------------------------------------------------------------------
 # Input Files

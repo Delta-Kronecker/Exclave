@@ -318,79 +318,97 @@ fn spawn_background_ip_rescan(
                 let mut healthy = 0usize;
                 let mut last_pct = 0usize;
                 let mut last_p2_report = 0usize;
-                while let Some(evt) = rx.recv().await {
-                    match evt {
-                        IpScanEvent::TcpDone { tcp_tested, tcp_ok: ok } => {
-                            tcp_done = tcp_tested;
-                            let pct = if scanned > 0 {
-                                tcp_done * 100 / scanned
-                            } else {
-                                100
-                            };
-                            if pct >= last_pct + 10 {
-                                emit_log(
-                                    0,
-                                    &format!(
-                                        "rescan #{cycle}: p1 tcp {tcp_done}/{scanned} ({pct}%) | ok {ok}"
-                                    ),
-                                );
-                                last_pct = (pct / 10) * 10;
-                            }
-                        }
-                        IpScanEvent::ProbeComplete(entry) => {
-                            p2_count += 1;
-                            if entry.tls_ok {
-                                tls_ok += 1;
-                            }
-                            if entry.tcp_latency_ms.is_some()
-                                && entry.tls_ok
-                                && entry.cert_valid
-                                && entry.ttfb_ms.is_some()
-                                && entry.download_bps.is_some()
-                                && entry.upload_bps.is_some()
-                            {
-                                healthy += 1;
-                            }
-                            if p2_count >= last_p2_report + 50 {
-                                emit_log(
-                                    0,
-                                    &format!(
-                                        "rescan #{cycle}: p2 tls {p2_count} probed | tls ok {tls_ok} | healthy {healthy}"
-                                    ),
-                                );
-                                last_p2_report = p2_count;
-                            }
-                        }
-                        IpScanEvent::Phase1Done { tcp_ok: ok, elapsed_ms } => {
-                            if ok == 0 {
-                                emit_log(
-                                    2,
-                                    &format!(
-                                        "rescan #{cycle}: phase 1 done — NO TCP connect accepted (0/{tcp_done}), scan is wasted; skipping TLS phase"
-                                    ),
-                                );
-                            } else {
-                                emit_log(
-                                    0,
-                                    &format!(
-                                        "rescan #{cycle}: phase 1 done — tcp ok {ok}/{tcp_done} in {elapsed_ms} ms; starting TLS/TTFB probes"
-                                    ),
-                                );
-                            }
-                        }
-                        IpScanEvent::Phase2Done {
-                            probed: p,
-                            tls_ok: to,
-                            healthy: h,
-                            elapsed_ms,
-                        } => {
+                // Heartbeat every 3s even while no result arrives, so the log
+                // always shows the scan is alive instead of appearing frozen.
+                loop {
+                    match tokio::time::timeout(
+                        std::time::Duration::from_secs(3),
+                        rx.recv(),
+                    )
+                    .await
+                    {
+                        Ok(None) => break,
+                        Err(_) => {
                             emit_log(
                                 0,
                                 &format!(
-                                    "rescan #{cycle}: phase 2 done — {p} probed, tls ok {to}, healthy {h} in {elapsed_ms} ms"
+                                    "rescan #{cycle}: waiting — tcp {tcp_done}/{scanned}, tls probed {p2_count} (no new result in 3s)"
                                 ),
                             );
                         }
+                        Ok(Some(evt)) => match evt {
+                            IpScanEvent::TcpDone { tcp_tested, tcp_ok: ok } => {
+                                tcp_done = tcp_tested;
+                                let pct = if scanned > 0 {
+                                    tcp_done * 100 / scanned
+                                } else {
+                                    100
+                                };
+                                if pct >= last_pct + 10 {
+                                    emit_log(
+                                        0,
+                                        &format!(
+                                            "rescan #{cycle}: p1 tcp {tcp_done}/{scanned} ({pct}%) | ok {ok}"
+                                        ),
+                                    );
+                                    last_pct = (pct / 10) * 10;
+                                }
+                            }
+                            IpScanEvent::ProbeComplete(entry) => {
+                                p2_count += 1;
+                                if entry.tls_ok {
+                                    tls_ok += 1;
+                                }
+                                if entry.tcp_latency_ms.is_some()
+                                    && entry.tls_ok
+                                    && entry.cert_valid
+                                    && entry.ttfb_ms.is_some()
+                                    && entry.download_bps.is_some()
+                                    && entry.upload_bps.is_some()
+                                {
+                                    healthy += 1;
+                                }
+                                if p2_count >= last_p2_report + 50 {
+                                    emit_log(
+                                        0,
+                                        &format!(
+                                            "rescan #{cycle}: p2 tls {p2_count} probed | tls ok {tls_ok} | healthy {healthy}"
+                                        ),
+                                    );
+                                    last_p2_report = p2_count;
+                                }
+                            }
+                            IpScanEvent::Phase1Done { tcp_ok: ok, elapsed_ms } => {
+                                if ok == 0 {
+                                    emit_log(
+                                        2,
+                                        &format!(
+                                            "rescan #{cycle}: phase 1 done — NO TCP connect accepted (0/{tcp_done}), scan is wasted; skipping TLS phase"
+                                        ),
+                                    );
+                                } else {
+                                    emit_log(
+                                        0,
+                                        &format!(
+                                            "rescan #{cycle}: phase 1 done — tcp ok {ok}/{tcp_done} in {elapsed_ms} ms; starting TLS/TTFB probes"
+                                        ),
+                                    );
+                                }
+                            }
+                            IpScanEvent::Phase2Done {
+                                probed: p,
+                                tls_ok: to,
+                                healthy: h,
+                                elapsed_ms,
+                            } => {
+                                emit_log(
+                                    0,
+                                    &format!(
+                                        "rescan #{cycle}: phase 2 done — {p} probed, tls ok {to}, healthy {h} in {elapsed_ms} ms"
+                                    ),
+                                );
+                            }
+                        },
                     }
                 }
             });
