@@ -19,7 +19,11 @@ object IPBFManager {
     private const val MAX_LOG_LINES = 1000
     private val logTimeFormat = SimpleDateFormat("HH:mm:ss", Locale.US)
 
+    @Volatile
+    private var currentIp: String? = null
+
     val isRunning: Boolean get() = handle != null
+    val currentActiveIp: String? get() = currentIp
 
     fun init() {
         try {
@@ -62,6 +66,9 @@ object IPBFManager {
                             else -> "D"
                         }
                         val line = "[$prefix] $message"
+                        if (message.contains("active_ip=")) {
+                            currentIp = message.substringAfter("active_ip=").substringBefore(" ")
+                        }
                         addLog(line)
                     }
                 }

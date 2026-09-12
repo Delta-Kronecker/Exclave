@@ -230,6 +230,14 @@ fn log_ipbf_settings(cfg: &Config, initial_target: &str) {
     }
 }
 
+fn format_rescan_timing(interval_secs: u64) -> String {
+    if interval_secs > 0 {
+        format!("initial target; first rescan in ~2s, then every {interval_secs}s")
+    } else {
+        "initial target; rescan disabled".to_string()
+    }
+}
+
 fn format_ms(v: Option<u64>) -> String {
     v.map(|x| format!("{x}ms")).unwrap_or_else(|| "-".into())
 }
@@ -261,13 +269,13 @@ fn spawn_background_ip_rescan(
     let interval = std::time::Duration::from_secs(interval_secs.max(1));
 
     rt.handle().spawn(async move {
-        // Run the first scan shortly after startup, then on the configured
-        // interval so the pre-configured start IP gets upgraded quickly.
-        tokio::time::sleep(std::time::Duration::from_secs(5)).await;
+        // Run the first scan a couple of seconds after startup so the active IP
+        // and any early upgrade decision become visible in the log quickly;
+        // afterwards it runs once per configured interval.
+        tokio::time::sleep(std::time::Duration::from_secs(2)).await;
         let mut cycle: u64 = 0;
         loop {
             cycle += 1;
-            tokio::time::sleep(interval).await;
 
             emit_log(
                 0,
@@ -403,6 +411,13 @@ fn spawn_background_ip_rescan(
                     ),
                 );
             }
+
+            // Single authoritative marker of the currently active IP so the app
+            // can display it without parsing free-form log lines.
+            let final_active = *active_ip.read().unwrap();
+            emit_log(0, &format!("active_ip={final_active}"));
+
+            tokio::time::sleep(interval).await;
         }
     });
 }
@@ -465,6 +480,7 @@ pub unsafe extern "C" fn ipbp_start_proxy(
     let flows = new_flow_table();
     let active_ip = Arc::new(RwLock::new(std::net::IpAddr::V4(target_addr)));
     let current_score = Arc::new(RwLock::new(None));
+    emit_log(0, &format!("startup active_ip={target_addr} ({})", format_rescan_timing(cfg.RESCAN_INTERVAL_SECS)));
     let ip_list_path = {
         let raw = PathBuf::from(&cfg.IP_LIST);
         if raw.is_absolute() {
@@ -622,6 +638,7 @@ pub unsafe extern "C" fn ipbp_start_proxy_from_config(
     let flows = new_flow_table();
     let active_ip = Arc::new(RwLock::new(std::net::IpAddr::V4(target_addr)));
     let current_score = Arc::new(RwLock::new(None));
+    emit_log(0, &format!("startup active_ip={target_addr} ({})", format_rescan_timing(cfg.RESCAN_INTERVAL_SECS)));
     let ip_list_path = PathBuf::from(&cfg.IP_LIST);
 
     // Start interceptor if needed

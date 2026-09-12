@@ -380,6 +380,7 @@
     <string name="clear_log">Clear</string>
     <string name="ipbf">IPBF</string>
     <string name="ipbf_running">IPBF Running</string>
+    <string name="ipbf_running_with_ip">IPBF Running — IP: %1$s</string>
     <string name="ipbf_stopped">IPBF Stopped</string>
     <string name="ipbf_start">Start</string>
     <string name="ipbf_stop">Stop</string>

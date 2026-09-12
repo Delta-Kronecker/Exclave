@@ -25,8 +25,11 @@ class IPBFFragment : ToolbarFragment(R.layout.layout_ipbf),
     private val handler = Handler(Looper.getMainLooper())
     private val logRunnable = object : Runnable {
         override fun run() {
-            if (isAdded && ::binding.isInitialized && binding.ipbfLogsContainer.visibility == View.VISIBLE) {
-                updateLogs()
+            if (isAdded && ::binding.isInitialized) {
+                updateStatus()
+                if (binding.ipbfLogsContainer.visibility == View.VISIBLE) {
+                    updateLogs()
+                }
             }
             handler.postDelayed(this, 500)
         }
@@ -121,7 +124,12 @@ class IPBFFragment : ToolbarFragment(R.layout.layout_ipbf),
 
     private fun updateStatus() {
         if (IPBFManager.isRunning) {
-            binding.ipbfStatus.text = getString(R.string.ipbf_running)
+            val ip = IPBFManager.currentActiveIp
+            binding.ipbfStatus.text = if (ip != null) {
+                getString(R.string.ipbf_running_with_ip, ip)
+            } else {
+                getString(R.string.ipbf_running)
+            }
             binding.ipbfStatus.setTextColor(requireContext().getColour(R.color.material_green_500))
             binding.ipbfToggle.text = getString(R.string.ipbf_stop)
         } else {
