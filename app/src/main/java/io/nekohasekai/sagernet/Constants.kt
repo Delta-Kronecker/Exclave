@@ -337,6 +337,7 @@ object Key {
     const val IPBF_TLS_FRAG_LENGTH = "ipbfTlsFragLength"
     const val IPBF_TLS_FRAG_INTERVAL = "ipbfTlsFragInterval"
     const val IPBF_TCP_SEG_SIZE = "ipbfTcpSegSize"
+    const val IPBF_RESCAN_INTERVAL = "ipbfRescanInterval"
 
 }
 

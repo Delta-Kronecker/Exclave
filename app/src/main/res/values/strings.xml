@@ -391,6 +391,7 @@
     <string name="ipbf_frag_length">TLS Frag Length</string>
     <string name="ipbf_frag_interval">Frag Interval (ms)</string>
     <string name="ipbf_tcp_seg_size">TCP Segment Size</string>
+    <string name="ipbf_rescan_interval">Rescan Interval (s)</string>
     <string name="ipbf_show_logs">Show Logs</string>
     <string name="ipbf_hide_logs">Hide Logs</string>
     <string name="ipbf_settings_applied">IPBF settings applied</string>

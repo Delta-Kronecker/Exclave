@@ -28,7 +28,7 @@ IP_LIST = "ip_list.txt"
 # ---------------------------------------------------------------------------
 
 SCAN_TIMEOUT_SECS = 5
-RESCAN_INTERVAL_SECS = 0
+RESCAN_INTERVAL_SECS = 60
 SNI_SWITCH_MIN_SCORE = 1
 SCAN_OUTPUT = ""
 

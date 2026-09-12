@@ -482,6 +482,8 @@ object DataStore : OnPreferenceDataStoreChangeListener {
     var ipbfTlsFragInterval by configurationStore.string(Key.IPBF_TLS_FRAG_INTERVAL) { "1" }
     var ipbfTcpSegSize by configurationStore.string(Key.IPBF_TCP_SEG_SIZE) { "1" }
 
+    var ipbfRescanInterval by configurationStore.string(Key.IPBF_RESCAN_INTERVAL) { "60" }
+
     var getInstalledPackagesInited by configurationStore.boolean("getInstalledPackagesInited")
     var postNotificationsPermissionRequested by configurationStore.boolean("postNotificationsPermissionRequested")
     var accessLocalNetworkPermissionRequested by configurationStore.boolean("accessLocalNetworkPermissionRequested")

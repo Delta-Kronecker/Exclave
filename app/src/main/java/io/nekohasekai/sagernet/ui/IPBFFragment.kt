@@ -60,6 +60,7 @@ class IPBFFragment : ToolbarFragment(R.layout.layout_ipbf),
         binding.ipbfFragLength.setText(DataStore.ipbfTlsFragLength)
         binding.ipbfFragInterval.setText(DataStore.ipbfTlsFragInterval)
         binding.ipbfTcpSegSize.setText(DataStore.ipbfTcpSegSize)
+        binding.ipbfRescanInterval.setText(DataStore.ipbfRescanInterval)
 
         binding.ipbfToggle.setOnClickListener {
             if (IPBFManager.isRunning) {
@@ -76,6 +77,7 @@ class IPBFFragment : ToolbarFragment(R.layout.layout_ipbf),
             DataStore.ipbfTlsFragLength = binding.ipbfFragLength.text?.toString()?.trim()?.ifEmpty { "5-40" } ?: "5-40"
             DataStore.ipbfTlsFragInterval = binding.ipbfFragInterval.text?.toString()?.trim()?.ifEmpty { "1" } ?: "1"
             DataStore.ipbfTcpSegSize = binding.ipbfTcpSegSize.text?.toString()?.trim()?.ifEmpty { "1" } ?: "1"
+            DataStore.ipbfRescanInterval = binding.ipbfRescanInterval.text?.toString()?.trim()?.ifEmpty { "60" } ?: "60"
             if (cidr.isNotEmpty()) {
                 IPBFManager.setCidrRange(cidr)
             }

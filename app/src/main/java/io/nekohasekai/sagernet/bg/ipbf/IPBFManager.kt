@@ -149,6 +149,7 @@ object IPBFManager {
         val fragLength = DataStore.ipbfTlsFragLength
         val fragInterval = DataStore.ipbfTlsFragInterval
         val tcpSegSize = DataStore.ipbfTcpSegSize
+        val rescanInterval = DataStore.ipbfRescanInterval.toIntOrNull()?.coerceAtLeast(0) ?: 60
         return """
 MODE = "ip_bypass_plus"
 NO_TUI = true
@@ -160,7 +161,7 @@ AUTO_SELECT = false
 BYPASS_METHOD = "tls_frag"
 IP_LIST = "$ipListPath"
 SCAN_TIMEOUT_SECS = 5
-RESCAN_INTERVAL_SECS = 0
+RESCAN_INTERVAL_SECS = $rescanInterval
 SNI_SWITCH_MIN_SCORE = 1
 IP_MAX_P1_CONCURRENT = 128
 IP_MAX_P2_CONCURRENT = 32
