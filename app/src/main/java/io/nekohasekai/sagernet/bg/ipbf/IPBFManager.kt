@@ -6,6 +6,9 @@ import io.nekohasekai.sagernet.SagerNet
 import io.nekohasekai.sagernet.database.DataStore
 import io.nekohasekai.sagernet.ktx.Logs
 import java.io.File
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 import java.util.concurrent.ConcurrentLinkedQueue
 
 object IPBFManager {
@@ -14,40 +17,41 @@ object IPBFManager {
     private var handle: Pointer? = null
     private val logBuffer = ConcurrentLinkedQueue<String>()
     private const val MAX_LOG_LINES = 1000
+    private val logTimeFormat = SimpleDateFormat("HH:mm:ss", Locale.US)
 
     val isRunning: Boolean get() = handle != null
 
     fun init() {
         try {
-            logBuffer.add("[I] Step 1: locating .so file")
+            addLog("[I] Step 1: locating .so file")
             val libDir = SagerNet.application.applicationInfo.nativeLibraryDir
             val soFile = File(libDir, "libip_bypass_plus_frag.so")
-            logBuffer.add("[I] nativeLibraryDir: $libDir")
-            logBuffer.add("[I] .so exists: ${soFile.exists()}")
+            addLog("[I] nativeLibraryDir: $libDir")
+            addLog("[I] .so exists: ${soFile.exists()}")
 
             if (!soFile.exists()) {
                 val files = File(libDir).list()
-                logBuffer.add("[E] .so NOT found. Dir contents: ${files?.joinToString()}")
+                addLog("[E] .so NOT found. Dir contents: ${files?.joinToString()}")
                 return
             }
 
-            logBuffer.add("[I] Step 1.5: skipping native stdout/stderr redirect (uses log callback)")
+            addLog("[I] Step 1.5: skipping native stdout/stderr redirect (uses log callback)")
 
-            logBuffer.add("[I] Step 2: loading native library")
+            addLog("[I] Step 2: loading native library")
             library = Native.load(soFile.absolutePath, IPBFLibrary::class.java)
-            logBuffer.add("[I] Native.load OK")
+            addLog("[I] Native.load OK")
         } catch (e: UnsatisfiedLinkError) {
-            logBuffer.add("[E] UnsatisfiedLinkError: ${e.message}")
+            addLog("[E] UnsatisfiedLinkError: ${e.message}")
             Logs.w("IPBF load error", e)
             return
         } catch (e: Throwable) {
-            logBuffer.add("[E] Load failed (${e.javaClass.simpleName}): ${e.message}")
+            addLog("[E] Load failed (${e.javaClass.simpleName}): ${e.message}")
             Logs.w("IPBF load error", e)
             return
         }
 
         try {
-            logBuffer.add("[I] Step 3: setting log callback")
+            addLog("[I] Step 3: setting log callback")
             library!!.ipbp_set_log_callback(object : IPBFLibrary.LogCallback {
                 override fun callback(level: Int, message: String?) {
                     if (message != null) {
@@ -62,37 +66,37 @@ object IPBFManager {
                     }
                 }
             })
-            logBuffer.add("[I] Step 3 OK: log callback set")
+            addLog("[I] Step 3 OK: log callback set")
         } catch (e: Throwable) {
-            logBuffer.add("[E] Step 3 failed: ${e.message}")
+            addLog("[E] Step 3 failed: ${e.message}")
             Logs.w("IPBF log callback failed", e)
             return
         }
 
         try {
-            logBuffer.add("[I] Step 4: getting version")
+            addLog("[I] Step 4: getting version")
             val ver = getVersion()
-            logBuffer.add("[I] Step 4 OK: IPBF loaded (v$ver)")
+            addLog("[I] Step 4 OK: IPBF loaded (v$ver)")
             Logs.i("IPBF library loaded, version: $ver")
         } catch (e: Throwable) {
-            logBuffer.add("[E] Step 4 failed: ${e.message}")
+            addLog("[E] Step 4 failed: ${e.message}")
         }
 
         try {
-            logBuffer.add("[I] Step 5: copying assets to internal storage")
+            addLog("[I] Step 5: copying assets to internal storage")
             copyAssetsIfNeeded()
             val ipbfDir = File(SagerNet.deviceStorage.noBackupFilesDir, "ipbf")
-            logBuffer.add("[I] Step 5 OK: ipbf dir = ${ipbfDir.absolutePath}")
-            logBuffer.add("[I] config.toml exists: ${File(ipbfDir, "config.toml").exists()}")
-            logBuffer.add("[I] ip_list.txt exists: ${File(ipbfDir, "ip_list.txt").exists()}")
+            addLog("[I] Step 5 OK: ipbf dir = ${ipbfDir.absolutePath}")
+            addLog("[I] config.toml exists: ${File(ipbfDir, "config.toml").exists()}")
+            addLog("[I] ip_list.txt exists: ${File(ipbfDir, "ip_list.txt").exists()}")
         } catch (e: Throwable) {
-            logBuffer.add("[E] Step 5 failed (${e.javaClass.simpleName}): ${e.message}")
+            addLog("[E] Step 5 failed (${e.javaClass.simpleName}): ${e.message}")
             Logs.w("IPBF copyAssets failed", e)
         }
     }
 
     private fun addLog(line: String) {
-        logBuffer.add(line)
+        logBuffer.add("[${logTimeFormat.format(Date())}] $line")
         while (logBuffer.size > MAX_LOG_LINES) {
             logBuffer.poll()
         }
@@ -101,7 +105,7 @@ object IPBFManager {
     fun start() {
         if (handle != null) return
         val lib = library ?: run {
-            logBuffer.add("[E] Library not loaded. init() may have failed.")
+            addLog("[E] Library not loaded. init() may have failed.")
             return
         }
 
@@ -110,37 +114,56 @@ object IPBFManager {
             val configFile = File(ipbfDir, "config.toml")
 
             if (!configFile.exists()) {
-                logBuffer.add("[E] config.toml not found at: ${configFile.absolutePath}")
+                addLog("[E] config.toml not found at: ${configFile.absolutePath}")
                 return
             }
 
-            logBuffer.add("[I] Starting IPBF...")
-            logBuffer.add("[I] Config: ${configFile.absolutePath}")
+            addLog("[I] Starting IPBF...")
+            addLog("[I] Config: ${configFile.absolutePath}")
 
             val configText = buildConfigWithAbsolutePaths(ipbfDir)
-            logBuffer.add("[I] Config text length: ${configText.length}")
+            addLog("[I] Config text length: ${configText.length}")
+            logAppliedSettings(ipbfDir)
 
             handle = lib.ipbp_start_proxy_from_config(configText, "104.16.0.1")
 
             if (handle != null) {
-                logBuffer.add("[I] IPBF proxy started successfully")
+                addLog("[I] IPBF proxy started successfully")
             } else {
-                logBuffer.add("[E] ipbp_start_proxy_from_config returned NULL")
-                logBuffer.add("[I] Trying ipbp_start_proxy with file path...")
+                addLog("[E] ipbp_start_proxy_from_config returned NULL")
+                addLog("[I] Trying ipbp_start_proxy with file path...")
                 val result = lib.ipbp_load_config(configFile.absolutePath)
-                logBuffer.add("[I] ipbp_load_config result: $result")
+                addLog("[I] ipbp_load_config result: $result")
                 handle = lib.ipbp_start_proxy(configFile.absolutePath, "104.16.0.1", "127.0.0.1")
                 if (handle != null) {
-                    logBuffer.add("[I] ipbp_start_proxy succeeded")
+                    addLog("[I] ipbp_start_proxy succeeded")
                 } else {
-                    logBuffer.add("[E] ipbp_start_proxy also returned NULL")
+                    addLog("[E] ipbp_start_proxy also returned NULL")
                 }
             }
         } catch (e: Throwable) {
             Logs.w("IPBF start failed", e)
-            logBuffer.add("[E] Exception (${e.javaClass.simpleName}): ${e.message}")
-            logBuffer.add("[E] ${e.stackTraceToString()}")
+            addLog("[E] Exception (${e.javaClass.simpleName}): ${e.message}")
+            addLog("[E] ${e.stackTraceToString()}")
         }
+    }
+
+    private fun logAppliedSettings(ipbfDir: File) {
+        val ipListFile = File(ipbfDir, "ip_list.txt")
+        val cidr = getCidrRange()
+        addLog("[I] ---- Applied IPBF settings ----")
+        addLog("[I] listener: 127.0.0.1:40443 | method: tls_frag | initial target: 104.16.0.1")
+        addLog(
+            "[I] frag: packets=${DataStore.ipbfTlsFragPackets} | " +
+                "length=${DataStore.ipbfTlsFragLength} | " +
+                "interval_ms=${DataStore.ipbfTlsFragInterval} | " +
+                "tcp_seg_size=${DataStore.ipbfTcpSegSize}"
+        )
+        addLog(
+            "[I] rescan_interval=${DataStore.ipbfRescanInterval} s | " +
+                "ip_list=${ipListFile.absolutePath} | cidr=$cidr"
+        )
+        addLog("[I] ---------------------------------")
     }
 
     private fun buildConfigWithAbsolutePaths(ipbfDir: File): String {
@@ -148,7 +171,7 @@ object IPBFManager {
         val fragPackets = DataStore.ipbfTlsFragPackets
         val fragLength = DataStore.ipbfTlsFragLength
         val fragInterval = DataStore.ipbfTlsFragInterval
-        val tcpSegSize = DataStore.ipbfTcpSegSize
+        val tcpSegSize = DataStore.ipbfTcpSegSize.toIntOrNull()?.coerceAtLeast(1) ?: 1
         val rescanInterval = DataStore.ipbfRescanInterval.toIntOrNull()?.coerceAtLeast(0) ?: 60
         return """
 MODE = "ip_bypass_plus"
@@ -179,7 +202,7 @@ RELAY_MAX_LIFETIME_SECS = 0
 TLS_FRAG_PACKETS = "$fragPackets"
 TLS_FRAG_LENGTH = "$fragLength"
 TLS_FRAG_INTERVAL_MS = "$fragInterval"
-TCP_SEG_SIZE = "$tcpSegSize"
+TCP_SEG_SIZE = $tcpSegSize
 TCP_SEG_NODELAY = true
         """.trimIndent()
     }
@@ -191,10 +214,10 @@ TCP_SEG_NODELAY = true
         try {
             lib.ipbp_stop_proxy(h)
             handle = null
-            logBuffer.add("[I] IPBF proxy stopped")
+            addLog("[I] IPBF proxy stopped")
         } catch (e: Throwable) {
             Logs.w("IPBF stop failed", e)
-            logBuffer.add("[E] Stop failed: ${e.message}")
+            addLog("[E] Stop failed: ${e.message}")
             handle = null
         }
     }
@@ -203,7 +226,7 @@ TCP_SEG_NODELAY = true
         val ipbfDir = File(SagerNet.deviceStorage.noBackupFilesDir, "ipbf")
         val ipList = File(ipbfDir, "ip_list.txt")
         ipList.writeText(cidr.trim() + "\n")
-        logBuffer.add("[I] IP range set to: $cidr")
+        addLog("[I] IP range set to: $cidr")
     }
 
     fun getCidrRange(): String {

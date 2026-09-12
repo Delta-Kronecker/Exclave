@@ -13,7 +13,7 @@ use ip_bypass_plus_frag_core::config::Config;
 use ip_bypass_plus_frag_core::flow::new_flow_table;
 use ip_bypass_plus_frag_core::handler::Handler;
 use ip_bypass_plus_frag_core::interceptor::{FilterSpec, PacketInterceptor};
-use ip_bypass_plus_frag_core::ip_scanner::{load_ip_list, scan_ip_list};
+use ip_bypass_plus_frag_core::ip_scanner::{load_ip_list, scan_ip_list, IpScanEvent};
 use ip_bypass_plus_frag_core::methods::build_method;
 use ip_bypass_plus_frag_core::net::default_interface_ipv4;
 use ip_bypass_plus_frag_core::proxy::{run_ip_bypass_plus_proxy, CONNECT_PORT};
@@ -186,6 +186,62 @@ pub unsafe extern "C" fn ipbp_scan_ips(
     count as i32
 }
 
+/// Pretty-print the effective IPBF configuration supplied by the caller.
+fn log_ipbf_settings(cfg: &Config, initial_target: &str) {
+    emit_log(
+        0,
+        &format!(
+            "settings: mode={} | method={} | listener={}:{} | initial_target={}",
+            cfg.MODE, cfg.BYPASS_METHOD, cfg.LISTEN_HOST, cfg.LISTEN_PORT, initial_target
+        ),
+    );
+    let frag_length = cfg
+        .TLS_FRAG_LENGTH
+        .map(|r| r.to_string())
+        .unwrap_or_else(|| "?".into());
+    emit_log(
+        0,
+        &format!(
+            "frag: packets={} | length={} | interval_ms={} | tcp_seg_size={} | nodelay={}",
+            cfg.TLS_FRAG_PACKETS, frag_length, cfg.TLS_FRAG_INTERVAL_MS, cfg.TCP_SEG_SIZE, cfg.TCP_SEG_NODELAY,
+        ),
+    );
+    emit_log(
+        0,
+        &format!(
+            "scanner: sni={} | timeout={}s | p1={} | p2={} | max_ip_scan={}",
+            cfg.IP_SCAN_SNI,
+            cfg.SCAN_TIMEOUT_SECS,
+            cfg.IP_MAX_P1_CONCURRENT,
+            cfg.IP_MAX_P2_CONCURRENT,
+            cfg.MAX_IP_SCAN,
+        ),
+    );
+    if cfg.RESCAN_INTERVAL_SECS > 0 {
+        emit_log(
+            0,
+            &format!(
+                "rescan: interval={}s | switch_min_score={} | ip_list={}",
+                cfg.RESCAN_INTERVAL_SECS, cfg.SNI_SWITCH_MIN_SCORE, cfg.IP_LIST
+            ),
+        );
+    } else {
+        emit_log(0, "rescan: disabled (interval=0s)");
+    }
+}
+
+fn format_ms(v: Option<u64>) -> String {
+    v.map(|x| format!("{x}ms")).unwrap_or_else(|| "-".into())
+}
+
+fn format_bps(v: Option<f64>) -> String {
+    match v {
+        None => "-".into(),
+        Some(bps) if bps >= 1_048_576.0 => format!("{:.1}MB/s", bps / 1_048_576.0),
+        Some(bps) => format!("{:.0}KB/s", bps / 1024.0),
+    }
+}
+
 /// Spawn a background task that periodically rescans the IP list and hot-swaps
 /// the active IP when a strictly better-scoring candidate is found.
 ///
@@ -203,43 +259,99 @@ fn spawn_background_ip_rescan(
         return;
     }
     let interval = std::time::Duration::from_secs(interval_secs.max(1));
-    let scan_timeout = std::time::Duration::from_secs(cfg.SCAN_TIMEOUT_SECS);
-    let scan_sni: Arc<str> = Arc::from(cfg.IP_SCAN_SNI.as_str());
-    let max_ips = cfg.MAX_IP_SCAN;
-    emit_log(0, &format!("rescan: enabled (interval {}s)", interval_secs));
 
     rt.handle().spawn(async move {
         // Run the first scan shortly after startup, then on the configured
         // interval so the pre-configured start IP gets upgraded quickly.
         tokio::time::sleep(std::time::Duration::from_secs(5)).await;
+        let mut cycle: u64 = 0;
         loop {
-            emit_log(0, "rescan: loading IP list ...");
+            cycle += 1;
+            tokio::time::sleep(interval).await;
+
+            emit_log(
+                0,
+                &format!("rescan #{cycle}: loading IP list from {}", path.display()),
+            );
             let mut ips = match load_ip_list(&path, cfg.IPV6_MAX_HOSTS) {
                 Ok(ips) => ips,
                 Err(e) => {
-                    emit_log(2, &format!("rescan: failed to load ip_list: {e:#}"));
-                    tokio::time::sleep(interval).await;
+                    emit_log(2, &format!("rescan #{cycle}: failed to load ip_list: {e:#}"));
                     continue;
                 }
             };
             if ips.is_empty() {
-                emit_log(2, "rescan: ip_list is empty");
-                tokio::time::sleep(interval).await;
+                emit_log(2, &format!("rescan #{cycle}: ip_list is empty"));
                 continue;
             }
-            if max_ips > 0 && ips.len() > max_ips {
+            if cfg.MAX_IP_SCAN > 0 && ips.len() > cfg.MAX_IP_SCAN {
                 use rand::seq::SliceRandom;
                 let mut rng = rand::thread_rng();
                 ips.shuffle(&mut rng);
-                ips.truncate(max_ips);
+                ips.truncate(cfg.MAX_IP_SCAN);
             }
-            emit_log(0, &format!("rescan: scanning {} IPs", ips.len()));
+            let scanned = ips.len();
+            let started = std::time::Instant::now();
+            emit_log(
+                0,
+                &format!(
+                    "rescan #{cycle}: scanning {scanned} IPs (timeout {}s, p1={}, p2={})",
+                    cfg.SCAN_TIMEOUT_SECS, cfg.IP_MAX_P1_CONCURRENT, cfg.IP_MAX_P2_CONCURRENT
+                ),
+            );
+
+            let scan_sni: Arc<str> = Arc::from(cfg.IP_SCAN_SNI.as_str());
+            let scan_timeout = std::time::Duration::from_secs(cfg.SCAN_TIMEOUT_SECS);
+            let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel::<IpScanEvent>();
+            let progress = tokio::spawn(async move {
+                let mut tcp_done = 0usize;
+                let mut tls_ok = 0usize;
+                let mut last_pct = 0usize;
+                while let Some(evt) = rx.recv().await {
+                    match evt {
+                        IpScanEvent::TcpDone { tcp_tested } => tcp_done = tcp_tested,
+                        IpScanEvent::ProbeComplete(entry) => {
+                            if entry.tls_ok {
+                                tls_ok += 1;
+                            }
+                        }
+                    }
+                    let pct = if scanned > 0 { tcp_done * 100 / scanned } else { 100 };
+                    if pct >= last_pct + 25 {
+                        emit_log(
+                            0,
+                            &format!(
+                                "rescan #{cycle}: tcp {tcp_done}/{scanned} ({pct}%) | tls ok {tls_ok}"
+                            ),
+                        );
+                        last_pct = (pct / 25) * 25;
+                    }
+                }
+            });
+
             let entries =
-                scan_ip_list(ips, scan_sni.clone(), scan_timeout, cfg.clone(), None).await;
+                scan_ip_list(ips, scan_sni, scan_timeout, cfg.clone(), Some(tx)).await;
+            let _ = progress.await;
+
+            let elapsed_ms = started.elapsed().as_millis();
+            emit_log(
+                0,
+                &format!(
+                    "rescan #{cycle}: complete — {} candidates probed in {elapsed_ms} ms",
+                    entries.len(),
+                ),
+            );
+            for (rank, e) in entries.iter().take(5).enumerate() {
+                let marker = if *active_ip.read().unwrap() == e.ip {
+                    " <- active"
+                } else {
+                    ""
+                };
+                emit_log(0, &format!("  {:>2}. {}{}", rank + 1, e.summary_line(), marker));
+            }
 
             let Some(best) = entries.first() else {
-                emit_log(2, "rescan: no results");
-                tokio::time::sleep(interval).await;
+                emit_log(2, &format!("rescan #{cycle}: no usable results"));
                 continue;
             };
 
@@ -248,37 +360,49 @@ fn spawn_background_ip_rescan(
             let cur_score_str = cur_score
                 .map(|s| s.to_string())
                 .unwrap_or_else(|| "?".to_string());
-            emit_log(
-                0,
-                &format!(
-                    "rescan: done, best={} score={} (current={} score={})",
-                    best.ip, best.score, current, cur_score_str
-                ),
-            );
 
             if current == best.ip {
                 *current_score.write().unwrap() = Some(best.score);
-                emit_log(0, "rescan: best IP unchanged; refreshed current score");
+                emit_log(
+                    0,
+                    &format!(
+                        "rescan #{cycle}: keep {current} — best candidate equals active; score refreshed to {}",
+                        best.score
+                    ),
+                );
             } else if best.score > cur_score.unwrap_or(0) {
                 *active_ip.write().unwrap() = best.ip;
                 *current_score.write().unwrap() = Some(best.score);
                 emit_log(
                     0,
                     &format!(
-                        "switching IP: {} -> {} (score {} -> {})",
-                        current, best.ip, cur_score_str, best.score
+                        "rescan #{cycle}: SWITCH {current} (score {cur_score_str}) -> {} (score {}) [+{}] | tcp {} tls {} ttfb {} down {} up {}",
+                        best.ip,
+                        best.score,
+                        best.score - cur_score.unwrap_or(0),
+                        format_ms(best.tcp_latency_ms),
+                        format_ms(best.tls_latency_ms),
+                        format_ms(best.ttfb_ms),
+                        format_bps(best.download_bps),
+                        format_bps(best.upload_bps),
+                    ),
+                );
+                emit_log(
+                    0,
+                    &format!(
+                        "rescan #{cycle}: note — new connections will use {}; existing connections keep {current} for their lifetime",
+                        best.ip
                     ),
                 );
             } else {
                 emit_log(
                     0,
                     &format!(
-                        "no better IP found (best {} score {} <= current {})",
-                        best.ip, best.score, cur_score_str
+                        "rescan #{cycle}: keep {current} (score {cur_score_str}) — best candidate {} (score {}) is not better",
+                        best.ip, best.score
                     ),
                 );
             }
-            tokio::time::sleep(interval).await;
         }
     });
 }
@@ -325,6 +449,7 @@ pub unsafe extern "C" fn ipbp_start_proxy(
             return std::ptr::null_mut();
         }
     };
+    log_ipbf_settings(&cfg, target);
 
     let rt = match tokio::runtime::Builder::new_multi_thread()
         .enable_all()
@@ -468,6 +593,7 @@ pub unsafe extern "C" fn ipbp_start_proxy_from_config(
         }
     };
     let cfg = Arc::new(cfg);
+    log_ipbf_settings(&cfg, target);
 
     let target_addr: std::net::Ipv4Addr = match target.parse() {
         Ok(a) => a,
